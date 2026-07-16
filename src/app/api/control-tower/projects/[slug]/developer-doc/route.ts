@@ -95,6 +95,7 @@ function buildDoc(project: ProjectRow) {
 ## 2. Objetivo
 
 Integrar o código do blog/site com a base provisionada deste projeto.
+Crie um documento .env.example com as variáveis que vai precisar que o usuário informe e acrescente as abaixo:
 
 ## 3. Variáveis de ambiente do blog
 
@@ -150,7 +151,7 @@ alter table ${project.schema_name}.entities
 
 1. Confirmar o projeto no catálogo central.
 2. Ler \`schema_name\` e \`template_key\`.
-3. Configurar as variáveis do blog no Easypanel.
+3. As variáveis deverão ser informadas apenas pelo usuário e na aba "Enviroment" do Easypanel.
 4. Conectar o front ao schema provisionado.
 5. Validar listagem, detalhe, SEO e mídia.
 6. Conferir se o blog respeita o domínio informado.

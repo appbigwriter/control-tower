@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+tsconfig.tsbuildinfo
+.env.local
+.env
+.env.*.local
+docs
+supabase
+README.md
