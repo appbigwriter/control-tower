@@ -1,0 +1,1 @@
+-- Generic store template placeholder for Control Tower

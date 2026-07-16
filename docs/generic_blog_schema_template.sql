@@ -1,0 +1,1 @@
+-- Generic blog template placeholder for Control Tower
