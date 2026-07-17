@@ -90,7 +90,7 @@ begin
   execute format('create table if not exists %I.categories (id uuid primary key default gen_random_uuid(), name text not null, slug text not null unique, created_at timestamptz not null default now(), updated_at timestamptz not null default now())', p_schema_name);
   execute format('create table if not exists %I.authors (id uuid primary key default gen_random_uuid(), name text not null, bio text, created_at timestamptz not null default now(), updated_at timestamptz not null default now())', p_schema_name);
   execute format('create table if not exists %I.tags (id uuid primary key default gen_random_uuid(), name text not null unique, slug text not null unique, created_at timestamptz not null default now(), updated_at timestamptz not null default now())', p_schema_name);
-  execute format('create table if not exists %I.articles (id uuid primary key default gen_random_uuid(), slug text not null unique, title text not null, excerpt text, content text, status text not null default ''DRAFT'', published_at timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now(), language text not null default ''pt'')', p_schema_name);
+  execute format('create table if not exists %I.articles (id uuid primary key default gen_random_uuid(), slug text not null unique, title text not null, excerpt text, content text, image_url text, description text, prompt_image text, search_terms text, status text not null default ''DRAFT'', published_at timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now(), language text not null default ''pt'')', p_schema_name);
 end;
 $$;
 

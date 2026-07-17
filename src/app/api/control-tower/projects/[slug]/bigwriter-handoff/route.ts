@@ -79,6 +79,10 @@ function buildPayloadExample(project: ProjectRow) {
       title: 'Titulo do artigo',
       excerpt: 'Resumo curto',
       content: 'Conteudo em markdown ou html',
+      image_url: 'https://cdn.exemplo.com/capa.jpg',
+      description: 'Descricao rapida do artigo',
+      prompt_image: 'Prompt usado para gerar a imagem',
+      search_terms: 'termo 1, termo 2, termo 3',
       status: 'draft | scheduled | published',
       published_at: '2026-07-17T00:00:00.000Z',
       author: {
@@ -166,6 +170,10 @@ O BigWriter deve devolver dados em formato estruturado, com foco em:
 - slug
 - resumo
 - conteudo
+- image_url
+- description
+- prompt_image
+- search_terms
 - status editorial
 - data de publicacao
 - autor
@@ -191,6 +199,16 @@ ${payload}
 6. Se a mudanca for global, voltar para a modelagem central antes de aplicar.
 
 Exemplo:
+
+\`\`\`sql
+alter table ${project.schema_name}.articles
+  add column if not exists image_url text,
+  add column if not exists description text,
+  add column if not exists prompt_image text,
+  add column if not exists search_terms text;
+\`\`\`
+
+Exemplo de ajuste em uma coluna especifica:
 
 \`\`\`sql
 alter table ${project.schema_name}.articles
