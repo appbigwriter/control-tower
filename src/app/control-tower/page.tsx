@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { BigWriterHandoffButton } from '@/components/control-tower/BigWriterHandoffButton'
 import { DeveloperDocButton } from '@/components/control-tower/DeveloperDocButton'
 import { ProjectProvisionForm } from '@/components/control-tower/ProjectProvisionForm'
 import { createServiceRoleClient } from '@/lib/supabase/service'
@@ -342,6 +343,7 @@ export default async function ControlTowerPage() {
                     Ver detalhes
                   </Link>
                   <DeveloperDocButton slug={project.slug} />
+                  <BigWriterHandoffButton slug={project.slug} />
                 </div>
               </div>
             </article>
