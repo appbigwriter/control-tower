@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { BigWriterHandoffButton } from '@/components/control-tower/BigWriterHandoffButton'
 import { DeveloperDocButton } from '@/components/control-tower/DeveloperDocButton'
+import { FrontendAdsenseHandoffButton } from '@/components/control-tower/FrontendAdsenseHandoffButton'
 import { ProjectProvisionForm } from '@/components/control-tower/ProjectProvisionForm'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 
@@ -335,15 +336,20 @@ export default async function ControlTowerPage() {
               </div>
 
               <div className="mt-4 border-t border-white/10 pt-4">
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    href={`/control-tower/${project.slug}`}
-                    className="text-sm font-medium text-cyan-200 hover:text-cyan-100"
-                  >
-                    Ver detalhes
-                  </Link>
-                  <DeveloperDocButton slug={project.slug} />
-                  <BigWriterHandoffButton slug={project.slug} />
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-3">
+                    <Link
+                      href={`/control-tower/${project.slug}`}
+                      className="text-sm font-medium text-cyan-200 hover:text-cyan-100"
+                    >
+                      Ver detalhes
+                    </Link>
+                    <DeveloperDocButton slug={project.slug} />
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <BigWriterHandoffButton slug={project.slug} />
+                    <FrontendAdsenseHandoffButton slug={project.slug} />
+                  </div>
                 </div>
               </div>
             </article>
