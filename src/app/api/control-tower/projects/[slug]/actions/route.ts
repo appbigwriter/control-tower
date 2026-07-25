@@ -48,15 +48,22 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   if (action === 'rebuild') {
-    const jobInsert = await supabase.from('provisioning_jobs').insert({
-      project_id: project.id,
-      job_type: 'rebuild_schema',
-      status: 'running',
-      input_payload: { schema_name: project.schema_name },
-    })
+    const { data: createdJob, error: jobInsertError } = await supabase
+      .from('provisioning_jobs')
+      .insert({
+        project_id: project.id,
+        job_type: 'rebuild_schema',
+        status: 'running',
+        input_payload: { schema_name: project.schema_name },
+      })
+      .select('id')
+      .single()
 
-    if (jobInsert.error) {
-      return NextResponse.json({ error: jobInsert.error.message }, { status: 500 })
+    if (jobInsertError || !createdJob) {
+      return NextResponse.json(
+        { error: jobInsertError?.message ?? 'Falha ao registrar job' },
+        { status: 500 },
+      )
     }
 
     try {
@@ -74,9 +81,12 @@ export async function POST(req: NextRequest, { params }: Params) {
         supabase.from('projects').update({ status: 'active' }).eq('id', project.id),
         supabase
           .from('provisioning_jobs')
-          .update({ status: 'success', finished_at: new Date().toISOString(), output_payload: { schema_name: project.schema_name } })
-          .eq('project_id', project.id)
-          .eq('job_type', 'rebuild_schema'),
+          .update({
+            status: 'success',
+            finished_at: new Date().toISOString(),
+            output_payload: { schema_name: project.schema_name },
+          })
+          .eq('id', createdJob.id),
         supabase.from('audit_logs').insert({
           project_id: project.id,
           action: 'project.rebuilt',
@@ -92,9 +102,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       await Promise.all([
         supabase
           .from('provisioning_jobs')
-          .update({ status: 'error', error_message: message, finished_at: new Date().toISOString() })
-          .eq('project_id', project.id)
-          .eq('job_type', 'rebuild_schema'),
+          .update({
+            status: 'error',
+            error_message: message,
+            finished_at: new Date().toISOString(),
+          })
+          .eq('id', createdJob.id),
         supabase.from('projects').update({ status: 'error' }).eq('id', project.id),
         supabase.from('audit_logs').insert({
           project_id: project.id,
