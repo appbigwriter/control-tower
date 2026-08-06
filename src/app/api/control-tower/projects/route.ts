@@ -44,8 +44,10 @@ export async function POST(req: NextRequest) {
     const parsed = createProjectSchema.safeParse(body)
 
     if (!parsed.success) {
+      const errorMsg = parsed.error.issues[0]?.message ?? 'Payload inválido'
+      console.error('[POST /api/control-tower/projects] Validation error:', errorMsg)
       return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? 'Payload inválido' },
+        { error: errorMsg },
         { status: 400 },
       )
     }
@@ -62,7 +64,8 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (orgError) {
-      return NextResponse.json({ error: orgError.message }, { status: 500 })
+      console.error('[POST /api/control-tower/projects] Organization fetch error:', orgError)
+      return NextResponse.json({ error: `Erro ao buscar organização: ${orgError.message}` }, { status: 500 })
     }
 
     const { data: projectId, error } = await supabase.rpc('provision_project', {
@@ -76,7 +79,8 @@ export async function POST(req: NextRequest) {
     })
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('[POST /api/control-tower/projects] RPC provision_project error:', error)
+      return NextResponse.json({ error: `Erro na RPC provision_project: ${error.message}` }, { status: 500 })
     }
 
     return NextResponse.json(
@@ -85,6 +89,7 @@ export async function POST(req: NextRequest) {
     )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[POST /api/control-tower/projects] Internal Exception:', error)
+    return NextResponse.json({ error: `Erro interno servidor: ${message}` }, { status: 500 })
   }
 }
