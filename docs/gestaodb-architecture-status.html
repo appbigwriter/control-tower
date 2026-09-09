@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GestaoDB — arquitetura e status</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+:root{--bg:#020617;--panel:#0b1220;--line:#243244;--text:#e2e8f0;--muted:#94a3b8;--cyan:#22d3ee;--green:#34d399;--violet:#a78bfa;--amber:#fbbf24;--rose:#fb7185;--slate:#94a3b8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;padding:28px}main{max-width:1500px;margin:auto}.eyebrow{font-size:11px;letter-spacing:.24em;color:var(--cyan);text-transform:uppercase}.title{font-size:30px;margin:8px 0 4px;font-weight:600}.subtitle{font-size:12px;color:var(--muted);margin:0 0 22px}.card{background:linear-gradient(145deg,#0c1626,#070d18);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 60px #0006;padding:18px}.diagram{overflow:auto}.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:11px;color:var(--muted)}.legend span{display:inline-flex;align-items:center;gap:7px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block}.ready{background:var(--green)}.partial{background:var(--amber)}.unknown{background:var(--rose)}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}.summary h3{font-size:12px;margin:0 0 12px}.summary ul{list-style:none;padding:0;margin:0;color:var(--muted);font-size:11px;line-height:1.8}.summary li:before{content:'• ';color:var(--cyan)}.summary .warn li:before{color:var(--amber)}.summary .risk li:before{color:var(--rose)}footer{font-size:10px;color:#64748b;margin-top:18px}
+svg{display:block;min-width:1100px;width:100%;height:auto}.box{stroke-width:1.5}.label{font:600 13px 'JetBrains Mono',monospace;fill:#f8fafc}.small{font:400 10px 'JetBrains Mono',monospace;fill:#cbd5e1}.tiny{font:400 9px 'JetBrains Mono',monospace;fill:#94a3b8}.boundary{fill:none;stroke-dasharray:8 5;stroke-width:1.2}.arrow{fill:none;stroke-width:1.6;marker-end:url(#arrow)}.arrow.dashed{stroke-dasharray:6 5}.pill{font:600 9px 'JetBrains Mono',monospace}.status{font:600 9px 'JetBrains Mono',monospace}
+@media(max-width:800px){body{padding:14px}.title{font-size:22px}.summary{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">FBR / system inventory</div>
+<h1 class="title">GestaoDB — arquitetura e status de implementação</h1>
+<p class="subtitle">Control Tower para catálogo, provisionamento e governança de projetos Supabase · leitura do repositório em 08/09/2026</p>
+<section class="card diagram">
+<svg viewBox="0 0 1400 780" role="img" aria-label="Diagrama da arquitetura do GestaoDB">
+<defs>
+ <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#1e293b" stroke-width=".5"/></pattern>
+ <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#64748b"/></marker>
+ <marker id="arrowCyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#22d3ee"/></marker>
+</defs>
+<rect width="1400" height="780" fill="url(#grid)"/>
+<!-- arrows first -->
+<path class="arrow" stroke="#22d3ee" marker-end="url(#arrowCyan)" d="M170 165H300"/>
+<path class="arrow" stroke="#22d3ee" marker-end="url(#arrowCyan)" d="M460 165H590"/>
+<path class="arrow" stroke="#34d399" d="M750 165V245"/>
+<path class="arrow" stroke="#34d399" d="M750 165V405"/>
+<path class="arrow" stroke="#34d399" d="M750 165V565"/>
+<path class="arrow" stroke="#a78bfa" d="M990 295H1080"/>
+<path class="arrow" stroke="#a78bfa" d="M990 455H1080"/>
+<path class="arrow" stroke="#a78bfa" d="M990 615H1080"/>
+<path class="arrow dashed" stroke="#fbbf24" d="M680 350H510"/>
+<path class="arrow dashed" stroke="#fb7185" d="M1200 350V510"/>
+<!-- boundary -->
+<rect x="285" y="38" width="710" height="180" rx="12" class="boundary" stroke="#22d3ee"/>
+<text x="305" y="59" class="tiny" fill="#22d3ee">NEXT.JS APPLICATION · standalone container</text>
+<rect x="1035" y="38" width="330" height="700" rx="12" class="boundary" stroke="#a78bfa"/>
+<text x="1055" y="59" class="tiny">SUPABASE / POSTGRES</text>
+<!-- boxes -->
+<g><rect x="35" y="120" width="135" height="90" rx="8" fill="#0f172a"/><rect x="35" y="120" width="135" height="90" rx="8" fill="rgba(30,41,59,.5)" stroke="#94a3b8" class="box"/><text x="52" y="151" class="label">Sergio / Admin</text><text x="52" y="172" class="small">Browser</text><text x="52" y="190" class="tiny">login + dashboard</text></g>
+<g><rect x="300" y="90" width="160" height="110" rx="8" fill="#0f172a"/><rect x="300" y="90" width="160" height="110" rx="8" fill="rgba(8,51,68,.4)" stroke="#22d3ee" class="box"/><text x="320" y="122" class="label">Next.js 15</text><text x="320" y="143" class="small">App Router / React 19</text><text x="320" y="163" class="small">UI Control Tower</text><text x="320" y="184" class="status" fill="#34d399">● IMPLEMENTADO</text></g>
+<g><rect x="590" y="90" width="160" height="110" rx="8" fill="#0f172a"/><rect x="590" y="90" width="160" height="110" rx="8" fill="rgba(6,78,59,.4)" stroke="#34d399" class="box"/><text x="610" y="122" class="label">Route handlers</text><text x="610" y="143" class="small">auth / projects</text><text x="610" y="163" class="small">actions / SQL / handoffs</text><text x="610" y="184" class="status" fill="#34d399">● IMPLEMENTADO</text></g>
+<g><rect x="1080" y="90" width="250" height="125" rx="8" fill="#0f172a"/><rect x="1080" y="90" width="250" height="125" rx="8" fill="rgba(76,29,149,.4)" stroke="#a78bfa" class="box"/><text x="1100" y="122" class="label">public · control plane</text><text x="1100" y="145" class="small">organizations</text><text x="1100" y="162" class="small">projects · templates</text><text x="1100" y="179" class="small">provisioning_jobs · audit_logs</text><text x="1100" y="199" class="status" fill="#34d399">● MIGRATION + RPC</text></g>
+<!-- RPC -->
+<g><rect x="510" y="285" width="170" height="130" rx="8" fill="#0f172a"/><rect x="510" y="285" width="170" height="130" rx="8" fill="rgba(120,53,15,.3)" stroke="#fbbf24" class="box"/><text x="530" y="317" class="label">Provisionamento</text><text x="530" y="340" class="small">provision_project()</text><text x="530" y="359" class="small">create_*_schema()</text><text x="530" y="381" class="small">idempotente / allowlist</text><text x="530" y="400" class="status" fill="#34d399">● IMPLEMENTADO</text></g>
+<!-- dynamic schemas -->
+<g><rect x="1080" y="250" width="250" height="105" rx="8" fill="#0f172a"/><rect x="1080" y="250" width="250" height="105" rx="8" fill="rgba(76,29,149,.4)" stroke="#a78bfa" class="box"/><text x="1100" y="281" class="label">Schema por projeto</text><text x="1100" y="303" class="small">blog_&lt;slug&gt;</text><text x="1100" y="320" class="small">store_&lt;slug&gt;</text><text x="1100" y="337" class="small">saas_&lt;slug&gt; / custom_*</text><text x="1100" y="348" class="status" fill="#34d399">● IMPLEMENTADO</text></g>
+<g><rect x="1080" y="410" width="250" height="105" rx="8" fill="#0f172a"/><rect x="1080" y="410" width="250" height="105" rx="8" fill="rgba(76,29,149,.4)" stroke="#a78bfa" class="box"/><text x="1100" y="441" class="label">Blog template</text><text x="1100" y="463" class="small">articles · authors · tags</text><text x="1100" y="480" class="small">SEO · mídia · layouts · ads</text><text x="1100" y="497" class="small">theme / site_config</text><text x="1100" y="508" class="status" fill="#34d399">● IMPLEMENTADO</text></g>
+<g><rect x="1080" y="570" width="250" height="105" rx="8" fill="#0f172a"/><rect x="1080" y="570" width="250" height="105" rx="8" fill="rgba(76,29,149,.4)" stroke="#a78bfa" class="box"/><text x="1100" y="601" class="label">Store / SaaS / Custom</text><text x="1100" y="623" class="small">products · orders · stock</text><text x="1100" y="640" class="small">workspaces · billing · usage</text><text x="1100" y="657" class="small">entities · records · events</text><text x="1100" y="668" class="status" fill="#34d399">● RPCS IMPLEMENTADAS</text></g>
+<!-- supporting -->
+<g><rect x="300" y="500" width="220" height="95" rx="8" fill="#0f172a"/><rect x="300" y="500" width="220" height="95" rx="8" fill="rgba(6,78,59,.4)" stroke="#34d399" class="box"/><text x="320" y="531" class="label">Operação / UI</text><text x="320" y="553" class="small">templates · jobs · detalhe</text><text x="320" y="570" class="small">SQL editor · rebuild / archive</text><text x="320" y="587" class="status" fill="#34d399">● IMPLEMENTADO</text></g>
+<g><rect x="570" y="500" width="180" height="95" rx="8" fill="#0f172a"/><rect x="570" y="500" width="180" height="95" rx="8" fill="rgba(136,19,55,.4)" stroke="#fb7185" class="box"/><text x="590" y="531" class="label">Auth / security</text><text x="590" y="553" class="small">cookie admin session</text><text x="590" y="570" class="small">service role client</text><text x="590" y="587" class="status" fill="#fbbf24">● REVISAR RLS / is_admin()</text></g>
+<text x="38" y="735" class="tiny">FONTE: README.md · PROJETO.md · src/app · supabase/migrations · build verificado</text>
+</svg>
+<div class="legend"><span><i class="dot ready"></i>implementado/evidenciado</span><span><i class="dot partial"></i>implementado com ressalva</span><span><i class="dot unknown"></i>risco ou não evidenciado</span></div>
+</section>
+<section class="summary">
+<div class="card"><h3 style="color:var(--green)">PRONTO / EVIDENCIADO</h3><ul><li>Next.js 15 + React 19 compilando</li><li>Dashboard, templates, jobs e detalhes</li><li>CRUD de projetos via API + Zod</li><li>RPC de provisionamento por business type</li><li>migrations para schemas blog/store/SaaS/custom</li><li>rebuild, archive, SQL e auditoria</li></ul></div>
+<div class="card"><h3 style="color:var(--amber)">PARCIAL / REVISAR</h3><ul class="warn"><li>PROJETO.md ainda tem stack e prioridades “a confirmar”</li><li>auth usa service role e is_admin() retorna true</li><li>README documenta deploy, mas não há evidência de deploy executado</li><li>migrations são declaradas; aplicação no Supabase não foi comprovada localmente</li></ul></div>
+<div class="card"><h3 style="color:var(--rose)">NÃO EVIDENCIADO</h3><ul class="risk"><li>testes automatizados de integração</li><li>observabilidade e alertas em produção</li><li>pipeline CI/CD</li><li>RLS/políticas completas para operação multiusuário</li></ul></div>
+</section>
+<footer>GestaoDB · diagrama gerado a partir do estado real do repositório · typecheck: passed · build: passed</footer>
+</main></body></html>
