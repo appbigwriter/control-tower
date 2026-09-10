@@ -20,6 +20,7 @@ function tablesByType(projectType: ProjectRow['business_type']) {
   switch (projectType) {
     case 'blog':
       return [
+        'users',
         'categories',
         'authors',
         'tags',
@@ -68,12 +69,12 @@ function buildDoc(project: ProjectRow) {
   const envBlock = [
     '# Blog runtime environment',
     `NEXT_PUBLIC_APP_NAME=${appName}`,
-    'SUPABASE_URL=<supabase-url-do-ambiente>',
-    'SUPABASE_SERVICE_ROLE_KEY=<inserir-no-servico-do-Easypanel>',
+    `SUPABASE_URL=${process.env.SUPABASE_URL ?? '<supabase-url-do-ambiente>'}`,
+    `SUPABASE_SERVICE_ROLE_KEY=${process.env.SUPABASE_SERVICE_ROLE_KEY ?? '<inserir-no-servico-do-Easypanel>'}`,
     '',
     '# Optional, only if the front uses public reads directly',
-    'NEXT_PUBLIC_SUPABASE_URL=<supabase-url-do-ambiente>',
-    'NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>',
+    `NEXT_PUBLIC_SUPABASE_URL=${process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '<supabase-url-do-ambiente>'}`,
+    `NEXT_PUBLIC_SUPABASE_ANON_KEY=${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.ANON_KEY ?? '<anon-key>'}`,
   ].join('\n')
 
   const tables = tablesByType(project.business_type).join('\n- ')

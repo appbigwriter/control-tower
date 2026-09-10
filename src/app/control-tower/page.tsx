@@ -4,6 +4,7 @@ import { BigWriterHandoffButton } from '@/components/control-tower/BigWriterHand
 import { DeveloperDocButton } from '@/components/control-tower/DeveloperDocButton'
 import { FrontendAdsenseHandoffButton } from '@/components/control-tower/FrontendAdsenseHandoffButton'
 import { ProjectProvisionForm } from '@/components/control-tower/ProjectProvisionForm'
+import { DeleteProjectButton } from '@/components/control-tower/DeleteProjectButton'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 
 export const dynamic = 'force-dynamic'
@@ -336,17 +337,18 @@ export default async function ControlTowerPage() {
               </div>
 
               <div className="mt-4 border-t border-white/10 pt-4">
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
                     <Link
                       href={`/control-tower/${project.slug}`}
                       className="text-sm font-medium text-cyan-200 hover:text-cyan-100"
                     >
                       Ver detalhes
                     </Link>
-                    <DeveloperDocButton slug={project.slug} />
+                    <DeleteProjectButton slug={project.slug} projectName={project.name} />
                   </div>
                   <div className="flex flex-wrap gap-3">
+                    <DeveloperDocButton slug={project.slug} />
                     <BigWriterHandoffButton slug={project.slug} />
                     <FrontendAdsenseHandoffButton slug={project.slug} />
                   </div>

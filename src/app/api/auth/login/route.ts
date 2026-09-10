@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     }
 
     const response = NextResponse.json({ ok: true })
-    response.cookies.set(CONTROL_TOWER_COOKIE, createSessionToken(), {
+    response.cookies.set(CONTROL_TOWER_COOKIE, await createSessionToken(), {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
@@ -25,5 +25,5 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const session = req.cookies.get(CONTROL_TOWER_COOKIE)?.value
-  return NextResponse.json({ authenticated: isValidSessionToken(session) })
+  return NextResponse.json({ authenticated: await isValidSessionToken(session) })
 }

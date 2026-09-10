@@ -20,6 +20,7 @@ function tableList(projectType: ProjectRow['business_type']) {
   switch (projectType) {
     case 'blog':
       return [
+        'users',
         'categories',
         'authors',
         'tags',
@@ -140,10 +141,10 @@ Crie um documento .env.exemple com as variaveis que vai precisar que o usuario i
 
 \`\`\`env
 NEXT_PUBLIC_APP_NAME=${project.name}
-SUPABASE_URL=<supabase-url-do-ambiente>
-SUPABASE_SERVICE_ROLE_KEY=<chave-do-servico-no-Easypanel>
-NEXT_PUBLIC_SUPABASE_URL=<supabase-url-do-ambiente>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_URL=${process.env.SUPABASE_URL ?? '<supabase-url-do-ambiente>'}
+SUPABASE_SERVICE_ROLE_KEY=${process.env.SUPABASE_SERVICE_ROLE_KEY ?? '<chave-do-servico-no-Easypanel>'}
+NEXT_PUBLIC_SUPABASE_URL=${process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '<supabase-url-do-ambiente>'}
+NEXT_PUBLIC_SUPABASE_ANON_KEY=${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.ANON_KEY ?? '<anon-key>'}
 \`\`\`
 
 ## 4. Regras de integracao
