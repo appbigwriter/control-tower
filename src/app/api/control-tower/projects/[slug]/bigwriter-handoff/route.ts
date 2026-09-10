@@ -115,49 +115,56 @@ function buildPayloadExample(project: ProjectRow) {
 function buildDoc(project: ProjectRow) {
   const tables = tableList(project.business_type).join('\n- ')
   const payload = JSON.stringify(buildPayloadExample(project), null, 2)
+  const namespace = `fbr/blogs/${project.id}`
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? 'https://supabase-control-tower-api.fbr.news'
 
   return `# Handoff BigWriter - ${project.name}
 
 ## 1. Objetivo
 
-Entregar ao dev do BigWriter os parametros exatos para gerar artigos e integrar a publicacao a este projeto.
-Este documento deve ser usado como contrato de integracao do gerador de textos.
+Entregar ao agente/desenvolvedor do **BigWriter** os parâmetros e contrato de saída exatos para gerar e publicar artigos isolados neste projeto.
+Este documento atua como contrato formal de integração editorial.
 
-## 2. Identidade do projeto
+---
 
-- Nome: ${project.name}
-- Slug: ${project.slug}
-- Tipo: ${project.business_type}
-- Template: ${project.template_key}
-- Versao do template: ${project.template_version}
-- Schema provisionado: ${project.schema_name}
-- Dominio: ${project.domain ?? 'nao definido'}
-- Idioma: ${project.language}
-- Status: ${project.status}
+## 2. Identidade do Projeto
 
-## 3. Variaveis de ambiente
+- **Nome:** ${project.name}
+- **Project ID (UUID):** \`${project.id}\`
+- **Slug:** \`${project.slug}\`
+- **Tipo de Negócio:** \`${project.business_type}\`
+- **Template Base:** \`${project.template_key}\` (v${project.template_version})
+- **Schema Provisionado (Isolamento):** \`${project.schema_name}\`
+- **Domínio Oficial:** \`${project.domain ?? 'não configurado'}\`
+- **Idioma:** \`${project.language}\`
+- **Status:** \`${project.status}\`
 
-Crie um documento .env.exemple com as variaveis que vai precisar que o usuario informe e acrescente as abaixo:
+---
+
+## 3. Variáveis de Integração (.env.example)
+
+> [!NOTE]
+> Os agentes editoriais operam em escopo delimitado e nunca recebem chaves com privilégios de governança global.
 
 \`\`\`env
-NEXT_PUBLIC_APP_NAME=${project.name}
-SUPABASE_URL=${process.env.SUPABASE_URL ?? '<supabase-url-do-ambiente>'}
-SUPABASE_SERVICE_ROLE_KEY=${process.env.SUPABASE_SERVICE_ROLE_KEY ?? '<chave-do-servico-no-Easypanel>'}
-NEXT_PUBLIC_SUPABASE_URL=${process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '<supabase-url-do-ambiente>'}
-NEXT_PUBLIC_SUPABASE_ANON_KEY=${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.ANON_KEY ?? '<anon-key>'}
+# Identificação do Projeto
+NEXT_PUBLIC_APP_NAME="${project.name}"
+CONTROL_TOWER_PROJECT_ID=${project.id}
+CONTROL_TOWER_SCHEMA_NAME=${project.schema_name}
+
+# Conexão PostgREST / Supabase
+SUPABASE_URL=${supabaseUrl}
+SUPABASE_SERVICE_ROLE_KEY=<secret-manager:${namespace}/SUPABASE_SERVICE_ROLE_KEY>
 \`\`\`
 
-## 4. Regras de integracao
+---
 
-- O projeto usa \`schema_name\` como isolamento de dados.
-- O \`template_key\` define o formato e o contrato de saida esperado.
-- O \`domain\` ja esta provisionado no cadastro do projeto e deve ser usado nas URLs canonicas.
-- O \`NEXT_PUBLIC_APP_NAME\` deve ser o nome da publicacao.
-- A \`SUPABASE_SERVICE_ROLE_KEY\` fica no servico do blog dentro do Easypanel e nao deve ir para o cliente.
-- As tabelas do schema \`public\` sao centralizadas e nao podem ser alteradas pelo dev do BigWriter.
-- Toda personalizacao de estrutura deve acontecer apenas no \`schema_name\` deste projeto.
-- Se precisar adicionar colunas, tabelas, relacoes ou indices, use o Editor SQL do Control Tower no projeto correto.
-- Nunca rode alteracoes em \`public\` a partir do blog, do gerador ou do front.
+## 4. Regras de Integração Editorial
+
+1. **Isolamento Estrito:** Toda inserção de artigos, categorias, autores, tags e mídias deve ser direcionada para o schema \`${project.schema_name}\`.
+2. **URLs Canônicas:** Utilizar o domínio oficial \`${project.domain ?? 'dominio-do-projeto'}\` para compor as URLs canônicas e tags de OpenGraph.
+3. **Catálogo Central Protegido:** Nunca consultar ou alterar tabelas do schema \`public\` (\`projects\`, \`organizations\`, etc.).
+4. **Governança:** Caso seja necessário criar novas colunas para campos customizados de IA (ex: \`ai_summary\`, \`reading_time\`), execute o script SQL via Control Tower dentro do schema \`${project.schema_name}\`.
 
 ## 5. Tabelas esperadas no schema
 

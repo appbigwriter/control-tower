@@ -25,8 +25,11 @@ Esta skill capacita agentes virtuais (Hermes, Antigravity, automações n8n ou C
      - Loja: `store_<slug>`
      - SaaS: `saas_<slug>`
      - Custom: `custom_<slug>`
-3. **Credenciais e Segurança:**
-   - `SUPABASE_SERVICE_ROLE_KEY` é de uso exclusivo de backend/serviço e **jamais** deve ser exposta no código cliente/frontend.
+3. **Credenciais e Segurança (Zero Secret Leaks):**
+   - O Control Tower **nunca trafega chaves privadas literais** em handoffs, prompts, logs ou chats de agentes.
+   - Cada projeto recebe um namespace imutável de secrets baseado em seu ID: `fbr/blogs/<project_id>/` (ou `fbr/projects/<project_id>/`).
+   - `SUPABASE_SERVICE_ROLE_KEY` é de uso exclusivo de backend/serviço no runtime do Easypanel / Secret Manager e **jamais** deve ser exposta no código cliente/frontend ou comitada no Git.
+   - Variáveis públicas do frontend (`NEXT_PUBLIC_*`) podem ser lidas no browser, enquanto variáveis privadas de runtime são injetadas exclusivamente na aba **Environment** do Easypanel.
    - Toda personalização de tabelas e índices deve ocorrer única e exclusivamente dentro do `schema_name` do projeto.
 
 ---

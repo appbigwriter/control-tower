@@ -66,118 +66,111 @@ function tablesByType(projectType: ProjectRow['business_type']) {
 
 function buildDoc(project: ProjectRow) {
   const appName = project.name
+  const namespace = `fbr/blogs/${project.id}`
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? 'https://supabase-control-tower-api.fbr.news'
+
   const envBlock = [
-    '# Blog runtime environment',
-    `NEXT_PUBLIC_APP_NAME=${appName}`,
-    `SUPABASE_URL=${process.env.SUPABASE_URL ?? '<supabase-url-do-ambiente>'}`,
-    `SUPABASE_SERVICE_ROLE_KEY=${process.env.SUPABASE_SERVICE_ROLE_KEY ?? '<inserir-no-servico-do-Easypanel>'}`,
+    '# =========================================================================',
+    '# 1. VARIÁVEIS PÚBLICAS (Frontend / Client-Side)',
+    '# Podem ser expostas no bundle do browser com prefixo NEXT_PUBLIC_',
+    '# =========================================================================',
+    `NEXT_PUBLIC_APP_NAME="${appName}"`,
+    `NEXT_PUBLIC_SUPABASE_URL=${supabaseUrl}`,
+    `NEXT_PUBLIC_SUPABASE_ANON_KEY=<secret-manager:${namespace}/NEXT_PUBLIC_SUPABASE_ANON_KEY>`,
     '',
-    '# Optional, only if the front uses public reads directly',
-    `NEXT_PUBLIC_SUPABASE_URL=${process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '<supabase-url-do-ambiente>'}`,
-    `NEXT_PUBLIC_SUPABASE_ANON_KEY=${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.ANON_KEY ?? '<anon-key>'}`,
+    '# =========================================================================',
+    '# 2. VARIÁVEIS PRIVADAS DE RUNTIME (Backend / Workers / Servidor)',
+    '# Injetar EXCLUSIVAMENTE na aba Environment do Easypanel / Secret Manager.',
+    '# NUNCA comitar no Git, NUNCA expor no Frontend, NUNCA colar em chat/logs.',
+    '# =========================================================================',
+    `SUPABASE_URL=${supabaseUrl}`,
+    `SUPABASE_SERVICE_ROLE_KEY=<secret-manager:${namespace}/SUPABASE_SERVICE_ROLE_KEY>`,
+    `CONTROL_TOWER_PROJECT_ID=${project.id}`,
+    `CONTROL_TOWER_SCHEMA_NAME=${project.schema_name}`,
   ].join('\n')
 
   const tables = tablesByType(project.business_type).join('\n- ')
 
-  return `# Documentação de Integração - ${project.name}
+  return `# Documentação de Integração Técnica - ${project.name}
 
-## 1. Identidade do projeto
+## 1. Identidade e Governança do Projeto
 
-- Nome: ${project.name}
-- Slug: ${project.slug}
-- Tipo: ${project.business_type}
-- Template: ${project.template_key}
-- Versão do template: ${project.template_version}
-- Schema provisionado: ${project.schema_name}
-- Domínio: ${project.domain ?? 'não definido'}
-- Idioma: ${project.language}
-- Status: ${project.status}
+- **Nome da Aplicação:** ${project.name}
+- **Project ID (UUID):** \`${project.id}\`
+- **Slug:** \`${project.slug}\`
+- **Tipo de Negócio:** \`${project.business_type}\`
+- **Template Base:** \`${project.template_key}\` (v${project.template_version})
+- **Schema Provisionado (Isolamento):** \`${project.schema_name}\`
+- **Domínio Oficial:** \`${project.domain ?? 'não configurado'}\`
+- **Idioma:** \`${project.language}\`
+- **Status:** \`${project.status}\`
+- **Namespace de Secrets:** \`${namespace}/\`
 
-## 2. Objetivo
+---
 
-Integrar o código do blog/site com a base provisionada deste projeto.
-Crie um documento .env.example com as variáveis que vai precisar que o usuário informe e acrescente as abaixo:
+## 2. Política de Secrets e Injeção de Variáveis
 
-## 3. Variáveis de ambiente do blog
+> [!IMPORTANT]
+> **Princípio Zero Secret Leaks:** O Control Tower e os documentos de handoff **nunca contêm valores reais de chaves privadas** (como a \`SUPABASE_SERVICE_ROLE_KEY\`). O documento entrega referências e especificações para injeção segura no runtime.
+
+### Onde configurar as variáveis:
+1. **Ambiente Local de Desenvolvimento:** Crie um arquivo \`.env.local\` (garantido no \`.gitignore\`) substituindo as referências pelas credenciais do seu ambiente de teste.
+2. **Ambiente de Produção (Easypanel):** Acesse a aplicação no painel do Easypanel $\\rightarrow$ aba **Environment** $\\rightarrow$ insira os valores reais ou vincule o Secret Manager do namespace \`${namespace}\`.
+
+---
+
+## 3. Modelo de Variáveis (.env.example)
 
 \`\`\`env
 ${envBlock}
 \`\`\`
 
-## 4. Regras importantes
+---
 
-- O blog deve usar \`schema_name\` como isolamento do projeto.
-- O schema é dedicado e não deve ser inferido a partir do browser.
-- O \`template_key\` define a estrutura base esperada.
-- O \`domain\` já está definido no catálogo e pode ser usado como referência.
-- O nome da aplicação no front deve ser \`NEXT_PUBLIC_APP_NAME=${appName}\`.
-- \`SUPABASE_SERVICE_ROLE_KEY\` deve ficar no serviço do blog/Easypanel e nunca no cliente.
-- As tabelas do schema \`public\` são catálogo central e não devem ser alteradas pelo dev do blog.
-- Qualquer personalização de entidade deve acontecer apenas no \`schema_name\` provisionado deste projeto.
-- Se precisar evoluir entidades, usar o Editor SQL do Control Tower no projeto correto.
-- Não criar, remover ou renomear tabelas do \`public\` a partir do blog.
-- Não usar SQL ad hoc no front para mexer no catálogo central.
+## 4. Regras de Arquitetura e Isolamento
 
-## 5. Tabelas esperadas no schema
+1. **Isolamento por Schema:** Todo o código da aplicação deve operar exclusivamente dentro do schema \`${project.schema_name}\`.
+2. **Catálogo Central (\`public\`):** As tabelas no schema \`public\` pertencem à governança central do Control Tower. O blog/sistema **NUNCA** deve criar, alterar ou excluir tabelas em \`public\`.
+3. **Chave de Serviço:** A \`SUPABASE_SERVICE_ROLE_KEY\` possui permissões administrativas e **jamais** deve ser acessível pelo código do cliente/frontend (browser).
+4. **Evolução de Estrutura:** Se o projeto necessitar de novas tabelas ou colunas específicas, aplique o SQL no schema \`${project.schema_name}\` via Editor SQL do Control Tower.
+
+---
+
+## 5. Tabelas Provisionadas no Schema \`${project.schema_name}\`
 
 - ${tables}
 
-## 6. Como personalizar o schema da entidade
+---
 
-1. Confirmar que a necessidade é específica do projeto.
-2. Identificar o \`schema_name\` do projeto.
-3. Preparar o SQL apenas para esse schema.
-4. Executar o SQL no Editor SQL do Control Tower ou no banco apontado para a entidade.
-5. Validar o resultado sem tocar em \`public\`.
-6. Se a mudança envolver comportamento global, voltar para a modelagem central antes de aplicar.
+## 6. Exemplo de Customização Segura de Schema
 
-Exemplo de personalização segura:
+Caso precise adicionar campos específicos ao seu projeto:
 
 \`\`\`sql
-alter table ${project.schema_name}.entities
-  add column if not exists notes text;
+-- Executar via Control Tower apontando para o schema do projeto:
+alter table ${project.schema_name}.articles
+  add column if not exists custom_notes text;
 \`\`\`
 
-## 7. Mapa prático para o dev
+---
 
-- Home do blog: ler artigos publicados e destaques.
-- Página de artigo: buscar por \`slug\`.
-- Listagem: usar \`status = PUBLISHED\` ou equivalente do template.
-- SEO: usar \`seo_title\`, \`seo_description\` e metadados do artigo.
-- Categorias: usar \`categories\`.
-- Autores: usar \`authors\`.
-- Mídia: usar \`media_assets\` ou storage, conforme o template.
+## 7. Checklist de Validação do Desenvolvedor
 
-## 8. Fluxo esperado de integração
+- [ ] Arquivo \`.env.local\` configurado localmente e presente no \`.gitignore\`.
+- [ ] No Easypanel, as variáveis privadas foram salvas na aba **Environment**.
+- [ ] O frontend utiliza apenas variáveis com prefixo \`NEXT_PUBLIC_\`.
+- [ ] As consultas Supabase especificam o schema \`${project.schema_name}\`.
+- [ ] Nenhuma query afeta ou consulta tabelas do schema \`public\`.
+- [ ] O health check da aplicação respondeu com sucesso (HTTP 200).
 
-1. Confirmar o projeto no catálogo central.
-2. Ler \`schema_name\` e \`template_key\`.
-3. As variáveis deverão ser informadas apenas pelo usuário e na aba "Enviroment" do Easypanel.
-4. Conectar o front ao schema provisionado.
-5. Validar listagem, detalhe, SEO e mídia.
-6. Conferir se o blog respeita o domínio informado.
-7. Se precisar personalizar entidades, executar o SQL apenas no \`schema_name\` deste projeto.
-8. Qualquer mudança em \`public\` deve passar pelo Control Tower e pela modelagem central.
+---
 
-## 9. Checklist para o dev
-
-- [ ] O blog está apontando para o Supabase correto.
-- [ ] O schema provisionado existe.
-- [ ] O front usa \`NEXT_PUBLIC_APP_NAME=${appName}\`.
-- [ ] O front lê o \`schema_name\` deste projeto.
-- [ ] O \`template_key\` foi seguido.
-- [ ] O domínio está configurado.
-- [ ] Os artigos publicados aparecem corretamente.
-- [ ] Nenhuma tabela do \`public\` foi alterada pelo blog.
-- [ ] Toda customização ocorreu no schema desta entidade.
-- [ ] Se houve ajuste estrutural, o SQL foi executado no Editor SQL do Control Tower.
-
-## 10. SQL de conferência
+## 8. Query de Conferência Cadastral
 
 \`\`\`sql
 select id, name, slug, business_type, template_key, schema_name, domain, status, template_version
 from public.projects
-where slug = '${project.slug}';
+where id = '${project.id}';
 \`\`\`
 `
 }
