@@ -48,9 +48,10 @@ export function isValidAgentApiKey(token: string | undefined | null): boolean {
   if (!cleanToken) return false
 
   const agentSecret = process.env.CONTROL_TOWER_AGENT_API_KEY
+  const fluxSecret = process.env.CONTROL_TOWER_FLUX_API_KEY
   const adminSecret = process.env.CONTROL_TOWER_ADMIN_SECRET
 
-  const secretsToTest = [agentSecret, adminSecret].filter(
+  const secretsToTest = [agentSecret, fluxSecret, adminSecret].filter(
     (s): s is string => Boolean(s && s.length > 0),
   )
   if (secretsToTest.length === 0) return false
