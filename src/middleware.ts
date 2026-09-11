@@ -11,7 +11,10 @@ export async function middleware(request: NextRequest) {
   const isProtectedPath =
     pathname.startsWith('/control-tower') || pathname.startsWith('/api/control-tower')
 
-  const isPublicAuthPath = pathname.startsWith('/login') || pathname.startsWith('/api/auth')
+  const isPublicAuthPath =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/api/auth') ||
+    pathname === '/api/control-tower/health'
 
   if (!isProtectedPath || isPublicAuthPath) {
     return NextResponse.next()
