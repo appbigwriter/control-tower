@@ -24,7 +24,7 @@ export async function middleware(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const apiKeyHeader = request.headers.get('x-api-key')
   const token = authHeader ?? apiKeyHeader
-  if (token && isValidAgentApiKey(token)) {
+  if (token && await isValidAgentApiKey(token)) {
     return NextResponse.next()
   }
 
