@@ -5,6 +5,9 @@ const adminSecret = process.env.CONTROL_TOWER_ADMIN_SECRET
 if (!adminSecret) {
   throw new Error('CONTROL_TOWER_ADMIN_SECRET must be injected by the runtime')
 }
+const runId = Date.now().toString(36)
+const testIdentityName = `fbr-agency-flux-e2e-${runId}`
+const testNamespace = `fbr/e2e/${runId}/`
 
 async function runTests() {
   console.log('=====================================================')
@@ -21,13 +24,11 @@ async function runTests() {
     throw new Error('Health check falhou: esperado HTTP 200, healthy e database connected')
   }
 
-  // 2. Limpar identities de teste anteriores no banco
+  // 2. O teste usa recursos temporários e não remove recursos oficiais
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  await supabase.from('service_identities').delete().in('name', ['fbr-agency-flux-service', 'test-temp-agent'])
-  await supabase.from('secret_namespaces').delete().eq('namespace', 'fbr/services/agency-flux/')
 
-  // 3. Criar a Service Identity oficial: fbr-agency-flux-service
-  console.log('\n2️⃣ Criando Service Identity: fbr-agency-flux-service...')
+  // 3. Criar uma Service Identity temporária para validação
+  console.log(`\n2️⃣ Criando Service Identity temporária: ${testIdentityName}...`)
   const createRes = await fetch(`${baseUrl}/api/control-tower/identities`, {
     method: 'POST',
     headers: {
@@ -35,8 +36,8 @@ async function runTests() {
       'Authorization': `Bearer ${adminSecret}`
     },
     body: JSON.stringify({
-      name: 'fbr-agency-flux-service',
-      namespace: 'fbr/services/agency-flux/',
+      name: testIdentityName,
+      namespace: testNamespace,
       identity_type: 'service',
       scopes: [
         'projects:read',
@@ -78,7 +79,7 @@ async function runTests() {
       'Authorization': `Bearer ${fluxJwtToken}`
     },
     body: JSON.stringify({
-      namespace: 'fbr/services/agency-flux/',
+      namespace: testNamespace,
       provider: 'easypanel'
     })
   })
@@ -116,13 +117,13 @@ async function runTests() {
       bindings: [
         {
           secret_name: 'CONTROL_TOWER_AGENT_API_KEY',
-          reference_path: 'fbr/services/agency-flux/CONTROL_TOWER_AGENT_API_KEY',
+          reference_path: `${testNamespace}CONTROL_TOWER_AGENT_API_KEY`,
           provider: 'easypanel',
           environment: 'production'
         },
         {
           secret_name: 'CONTROL_TOWER_BASE_URL',
-          reference_path: 'fbr/services/agency-flux/CONTROL_TOWER_BASE_URL',
+          reference_path: `${testNamespace}CONTROL_TOWER_BASE_URL`,
           provider: 'easypanel',
           environment: 'production'
         }
@@ -133,8 +134,9 @@ async function runTests() {
   console.log(`Status HTTP /secrets/bindings: ${bindRes.status} (Esperado: 201)`, bindData)
   if (bindRes.status !== 201) throw new Error('Falha ao registrar bindings: esperado HTTP 201')
 
-  // 8. Testar Ciclo de Vida: Revogação e Bloqueio Imediato
-  console.log('\n7️⃣ Testando Ciclo de Vida: Criação de Identidade Temporária e Revogação...')
+  // 8. Testar Ciclo de Vida: segunda identidade temporária e revogação
+  const tempIdentityName = `test-temp-agent-${runId}`
+  console.log(`\n7️⃣ Testando Ciclo de Vida: ${tempIdentityName}...`)
   const tempRes = await fetch(`${baseUrl}/api/control-tower/identities`, {
     method: 'POST',
     headers: {
@@ -142,8 +144,8 @@ async function runTests() {
       'Authorization': `Bearer ${adminSecret}`
     },
     body: JSON.stringify({
-      name: 'test-temp-agent',
-      namespace: 'fbr/agents/temp/',
+      name: tempIdentityName,
+      namespace: `fbr/e2e/temp/${runId}/`,
       identity_type: 'agent',
       scopes: ['projects:read']
     })
@@ -170,8 +172,10 @@ async function runTests() {
   console.log(`Status após revogação: ${testAfterRevoke.status} (Esperado: 401)`)
   if (testAfterRevoke.status !== 401) throw new Error('FALHA DE SEGURANÇA: Token revogado não foi bloqueado com HTTP 401!')
 
-  // Limpeza de teste temporário
+  // Limpeza somente dos recursos temporários desta execução
   await supabase.from('service_identities').delete().eq('id', tempId)
+  await supabase.from('service_identities').delete().eq('id', fluxIdentityId)
+  await supabase.from('secret_namespaces').delete().eq('id', namespaceId)
 
   console.log('\n=====================================================')
   console.log('🎉 HOMOLOGAÇÃO COMPLETA: TODOS OS CRITÉRIOS ATENDIDOS!')
