@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, hasRequiredScope } from '@/lib/auth/control-tower'
 import { getSecretsProvider } from '@/lib/secrets/adapter'
 
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false }
-})
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,6 +24,8 @@ export async function POST(req: NextRequest) {
     if (!namespace_id || !bindings || !Array.isArray(bindings) || bindings.length === 0) {
       return NextResponse.json({ error: 'Campos obrigatórios: namespace_id, bindings (array)' }, { status: 400 })
     }
+
+    const supabase = createServiceRoleClient()
 
     // 1. Obter informações do namespace
     const { data: ns, error: nsError } = await supabase
@@ -111,6 +109,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'namespace_id é obrigatório' }, { status: 400 })
     }
 
+    const supabase = createServiceRoleClient()
     const { data: bindings, error } = await supabase
       .from('secret_bindings')
       .select('id, namespace_id, secret_name, reference_path, provider, environment, status, created_by, created_at, updated_at')

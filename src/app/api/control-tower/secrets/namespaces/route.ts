@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, hasRequiredScope } from '@/lib/auth/control-tower'
 
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false }
-})
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +24,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Campo obrigatório: namespace' }, { status: 400 })
     }
 
-    // Upsert or insert secret namespace
+    const supabase = createServiceRoleClient()
+
     const { data, error } = await supabase
       .from('secret_namespaces')
       .upsert({
@@ -69,6 +66,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('project_id')
 
+    const supabase = createServiceRoleClient()
     let query = supabase
       .from('secret_namespaces')
       .select('id, project_id, namespace, provider, status, created_by, created_at, updated_at')

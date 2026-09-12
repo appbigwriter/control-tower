@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, generateIdentityJwt, hasRequiredScope } from '@/lib/auth/control-tower'
 
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false }
-})
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,10 +35,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'identity_type inválido. Permitidos: agent, service, admin' }, { status: 400 })
     }
 
-    // Regra: identidades administrativas não devem ser criadas por chamadas de agents comuns
     if (identity_type === 'admin' && principal.type !== 'admin') {
       return NextResponse.json({ error: 'Forbidden: Apenas administradores podem criar identidades do tipo admin' }, { status: 403 })
     }
+
+    const supabase = createServiceRoleClient()
 
     // Verificar se já existe name ou namespace
     const { data: existing } = await supabase
@@ -80,7 +77,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Falha ao registrar Service Identity no banco de dados' }, { status: 500 })
     }
 
-    // Gerar token JWT assinado
     const token = await generateIdentityJwt(identity, expires_in)
 
     return NextResponse.json({
@@ -115,6 +111,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabase = createServiceRoleClient()
     const { data: identities, error } = await supabase
       .from('service_identities')
       .select('id, name, namespace, identity_type, scopes, status, issuer, audience, key_id, expires_at, last_used_at, revoked_at, created_by, created_at, updated_at')
