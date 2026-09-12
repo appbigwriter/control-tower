@@ -14,18 +14,40 @@ export interface ServiceStatusResult {
   projectName: string
 }
 
+export interface EasypanelServiceData {
+  name: string
+  projectName: string
+  status?: string
+  env?: string
+  domains?: string[]
+}
+
+export interface EasypanelMutationResponse {
+  result: {
+    data: {
+      json: {
+        success?: boolean
+        [key: string]: unknown
+      }
+    }
+  }
+}
+
+export interface EasypanelQueryResponse<T> {
+  result: {
+    data: {
+      json: T
+    }
+  }
+}
+
 export interface SecretsProvider {
   name: string
   injectSecrets(namespace: string, secrets: SecretPayload[]): Promise<void>
-  getService?(projectName: string, serviceName: string): Promise<any>
-  updateEnv?(projectName: string, serviceName: string, env: Record<string, string>): Promise<any>
-  deploy?(projectName: string, serviceName: string): Promise<any>
+  getService?(projectName: string, serviceName: string): Promise<EasypanelServiceData>
+  updateEnv?(projectName: string, serviceName: string, env: Record<string, string>): Promise<EasypanelMutationResponse>
+  deploy?(projectName: string, serviceName: string): Promise<EasypanelMutationResponse>
   getStatus?(projectName: string, serviceName: string): Promise<ServiceStatusResult>
-}
-
-function maskSecret(val: string): string {
-  if (!val || val.length <= 6) return '******'
-  return `${val.slice(0, 3)}...${val.slice(-3)}`
 }
 
 export class LocalSecretsProvider implements SecretsProvider {
@@ -71,112 +93,137 @@ export class LocalSecretsProvider implements SecretsProvider {
 export class EasypanelSecretsProvider implements SecretsProvider {
   name = 'easypanel'
 
-  private get baseUrl(): string {
-    return (process.env.EASYPANEL_API_URL || 'http://localhost:3030').replace(/\/$/, '')
+  private get apiUrl(): string {
+    const url = process.env.EASYPANEL_API_URL
+    if (!url) {
+      throw new Error('[EasypanelSecretsProvider] FAIL-CLOSED: EASYPANEL_API_URL não está configurada no runtime.')
+    }
+    return url.replace(/\/$/, '')
   }
 
-  private get authHeader(): Record<string, string> {
-    const token = process.env.EASYPANEL_API_TOKEN || process.env.EASYPANEL_API_KEY || ''
-    return token ? { 'Authorization': `Bearer ${token}` } : {}
+  private get apiToken(): string {
+    const token = process.env.EASYPANEL_API_TOKEN || process.env.EASYPANEL_API_KEY
+    if (!token) {
+      throw new Error('[EasypanelSecretsProvider] FAIL-CLOSED: EASYPANEL_API_TOKEN / EASYPANEL_API_KEY obrigatória e ausente.')
+    }
+    return token
   }
 
-  private parseNamespace(namespace: string): { projectName: string; serviceName: string } {
-    // Exemplo de namespace: "fbr/services/agency-flux/" -> project: "sistemas", service: "agency-flux"
-    const cleaned = namespace.replace(/^\/+|\/+$/g, '')
-    const parts = cleaned.split('/')
-    const serviceName = parts[parts.length - 1] || 'default-service'
-    const projectName = process.env.EASYPANEL_PROJECT_NAME || 'sistemas'
-    return { projectName, serviceName }
+  private get authHeaders(): Record<string, string> {
+    return {
+      'Authorization': `Bearer ${this.apiToken}`,
+      'Content-Type': 'application/json'
+    }
+  }
+
+  public resolveProjectAndService(namespace: string): { projectName: string; serviceName: string } {
+    const envProject = process.env.EASYPANEL_PROJECT_NAME
+    const envService = process.env.EASYPANEL_SERVICE_NAME
+
+    if (envProject && envService) {
+      return { projectName: envProject, serviceName: envService }
+    }
+
+    // Extração determinística do namespace:
+    // ex: "fbr/services/agency-flux/" -> project: "fbr", service: "agency-flux"
+    // ex: "sistemas/control-tower/" -> project: "sistemas", service: "control-tower"
+    const segments = namespace.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean)
+
+    if (segments.length >= 2) {
+      const projectName = envProject || segments[0]
+      const serviceName = envService || segments[segments.length - 1]
+      return { projectName, serviceName }
+    }
+
+    if (segments.length === 1) {
+      const defaultProject = envProject || 'sistemas'
+      return { projectName: defaultProject, serviceName: segments[0] }
+    }
+
+    throw new Error(`[EasypanelSecretsProvider] FAIL-CLOSED: Não foi possível determinar projectName e serviceName a partir do namespace '${namespace}'`)
   }
 
   /**
-   * 1. services.getService: localiza e valida a existência do serviço
+   * 1. services.getService: localiza e valida a existência do serviço via tRPC
    */
-  async getService(projectName: string, serviceName: string): Promise<any> {
-    const url = `${this.baseUrl}/api/trpc/services.getService?input=${encodeURIComponent(
+  async getService(projectName: string, serviceName: string): Promise<EasypanelServiceData> {
+    const url = `${this.apiUrl}/api/trpc/services.getService?input=${encodeURIComponent(
       JSON.stringify({ json: { projectName, serviceName } })
     )}`
 
-    if (!process.env.EASYPANEL_API_TOKEN && !process.env.EASYPANEL_API_KEY) {
-      // Retorno padronizado de simulação com zero leaks quando rodando sem credencial remota
-      return { result: { data: { json: { name: serviceName, projectName, status: 'running' } } } }
+    const res = await fetch(url, { headers: this.authHeaders })
+    if (!res.ok) {
+      throw new Error(`[EasypanelSecretsProvider] services.getService (${projectName}/${serviceName}) falhou com HTTP ${res.status}`)
     }
 
-    const res = await fetch(url, { headers: { ...this.authHeader, 'Content-Type': 'application/json' } })
-    if (!res.ok) throw new Error(`Easypanel getService falhou: HTTP ${res.status}`)
-    return await res.json()
+    const payload = (await res.json()) as EasypanelQueryResponse<EasypanelServiceData>
+    if (!payload?.result?.data?.json) {
+      throw new Error(`[EasypanelSecretsProvider] Resposta inválida para getService (${projectName}/${serviceName})`)
+    }
+
+    return payload.result.data.json
   }
 
   /**
    * 2. services.updateEnv: atualiza o bloco de Environment do serviço
    */
-  async updateEnv(projectName: string, serviceName: string, env: Record<string, string>): Promise<any> {
+  async updateEnv(projectName: string, serviceName: string, env: Record<string, string>): Promise<EasypanelMutationResponse> {
     const envString = Object.entries(env)
       .map(([k, v]) => `${k}=${v}`)
       .join('\n')
 
-    const url = `${this.baseUrl}/api/trpc/services.updateEnv`
+    const url = `${this.apiUrl}/api/trpc/services.updateEnv`
     const body = { json: { projectName, serviceName, env: envString } }
-
-    if (!process.env.EASYPANEL_API_TOKEN && !process.env.EASYPANEL_API_KEY) {
-      const maskedSummary = Object.entries(env)
-        .map(([k, v]) => `${k}=${maskSecret(v)}`)
-        .join(', ')
-      console.log(`[EasypanelSecretsProvider] updateEnv (${projectName}/${serviceName}): [${maskedSummary}]`)
-      return { result: { data: { json: { success: true } } } }
-    }
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { ...this.authHeader, 'Content-Type': 'application/json' },
+      headers: this.authHeaders,
       body: JSON.stringify(body)
     })
-    if (!res.ok) throw new Error(`Easypanel updateEnv falhou: HTTP ${res.status}`)
-    return await res.json()
+
+    if (!res.ok) {
+      throw new Error(`[EasypanelSecretsProvider] services.updateEnv (${projectName}/${serviceName}) falhou com HTTP ${res.status}`)
+    }
+
+    return (await res.json()) as EasypanelMutationResponse
   }
 
   /**
    * 3. services.deploy: dispara deploy / restart para recarregar o novo environment
    */
-  async deploy(projectName: string, serviceName: string): Promise<any> {
-    const url = `${this.baseUrl}/api/trpc/services.deploy`
+  async deploy(projectName: string, serviceName: string): Promise<EasypanelMutationResponse> {
+    const url = `${this.apiUrl}/api/trpc/services.deploy`
     const body = { json: { projectName, serviceName } }
-
-    if (!process.env.EASYPANEL_API_TOKEN && !process.env.EASYPANEL_API_KEY) {
-      console.log(`[EasypanelSecretsProvider] deploy (${projectName}/${serviceName}) acionado com sucesso`)
-      return { result: { data: { json: { success: true } } } }
-    }
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: { ...this.authHeader, 'Content-Type': 'application/json' },
+      headers: this.authHeaders,
       body: JSON.stringify(body)
     })
-    if (!res.ok) throw new Error(`Easypanel deploy falhou: HTTP ${res.status}`)
-    return await res.json()
+
+    if (!res.ok) {
+      throw new Error(`[EasypanelSecretsProvider] services.deploy (${projectName}/${serviceName}) falhou com HTTP ${res.status}`)
+    }
+
+    return (await res.json()) as EasypanelMutationResponse
   }
 
   /**
    * 4. services.getStatus: consulta status do container no Easypanel
    */
   async getStatus(projectName: string, serviceName: string): Promise<ServiceStatusResult> {
-    const url = `${this.baseUrl}/api/trpc/services.getStatus?input=${encodeURIComponent(
+    const url = `${this.apiUrl}/api/trpc/services.getStatus?input=${encodeURIComponent(
       JSON.stringify({ json: { projectName, serviceName } })
     )}`
 
-    if (!process.env.EASYPANEL_API_TOKEN && !process.env.EASYPANEL_API_KEY) {
-      return {
-        status: 'running',
-        healthy: true,
-        serviceName,
-        projectName
-      }
+    const res = await fetch(url, { headers: this.authHeaders })
+    if (!res.ok) {
+      throw new Error(`[EasypanelSecretsProvider] services.getStatus (${projectName}/${serviceName}) falhou com HTTP ${res.status}`)
     }
 
-    const res = await fetch(url, { headers: { ...this.authHeader, 'Content-Type': 'application/json' } })
-    if (!res.ok) throw new Error(`Easypanel getStatus falhou: HTTP ${res.status}`)
-    const json = await res.json()
-    const rawStatus = json?.result?.data?.json?.status || 'running'
+    const payload = (await res.json()) as EasypanelQueryResponse<{ status: string }>
+    const rawStatus = payload?.result?.data?.json?.status || 'stopped'
+
     return {
       status: rawStatus,
       healthy: rawStatus === 'running',
@@ -186,27 +233,46 @@ export class EasypanelSecretsProvider implements SecretsProvider {
   }
 
   /**
-   * Orquestração completa de injeção de secrets
+   * Injeção de secrets com verificação Fail-Closed e Readback real de status
    */
   async injectSecrets(namespace: string, secrets: SecretPayload[]): Promise<void> {
-    const { projectName, serviceName } = this.parseNamespace(namespace)
+    const { projectName, serviceName } = this.resolveProjectAndService(namespace)
+
     const envMap: Record<string, string> = {}
     for (const s of secrets) {
       envMap[s.key_name] = s.secret_value
     }
 
-    // 1. services.getService
+    // 1. services.getService - Readback de pré-existência
     await this.getService(projectName, serviceName)
 
-    // 2. services.updateEnv
+    // 2. services.updateEnv - Injeção das variáveis
     await this.updateEnv(projectName, serviceName, envMap)
 
-    // 3. services.deploy
+    // 3. services.deploy - Trigger de deploy
     await this.deploy(projectName, serviceName)
 
-    // 4. services.getStatus
-    const status = await this.getStatus(projectName, serviceName)
-    console.log(`[EasypanelSecretsProvider] Serviço ${projectName}/${serviceName} verificado: status=${status.status}`)
+    // 4. services.getStatus - Readback pós-deploy com verificação rigorosa
+    const maxRetries = 10
+    const delayMs = 2000
+    let finalStatus: ServiceStatusResult | null = null
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      finalStatus = await this.getStatus(projectName, serviceName)
+      if (finalStatus.status === 'running') {
+        break
+      }
+      if (finalStatus.status === 'error') {
+        throw new Error(`[EasypanelSecretsProvider] Container ${projectName}/${serviceName} entrou em estado de erro pós-deploy`)
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+
+    if (finalStatus?.status !== 'running') {
+      throw new Error(`[EasypanelSecretsProvider] FAIL-CLOSED: Timeout aguardando status 'running' para ${projectName}/${serviceName} (Status atual: ${finalStatus?.status})`)
+    }
+
+    console.log(`[EasypanelSecretsProvider] Injeção e deploy concluídos com sucesso para ${projectName}/${serviceName} (Status: running)`)
   }
 }
 
@@ -214,6 +280,10 @@ export class VaultSecretsProvider implements SecretsProvider {
   name = 'vault'
 
   async injectSecrets(namespace: string, secrets: SecretPayload[]): Promise<void> {
+    const vaultUrl = process.env.VAULT_ADDR
+    if (!vaultUrl) {
+      throw new Error('[VaultSecretsProvider] FAIL-CLOSED: VAULT_ADDR não está configurada.')
+    }
     console.log(`[VaultSecretsProvider] Vault reference updated for ${namespace} (${secrets.length} keys)`)
   }
 }

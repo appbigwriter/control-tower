@@ -6,21 +6,6 @@ if (!adminSecret) {
   throw new Error('CONTROL_TOWER_ADMIN_SECRET must be injected by the runtime')
 }
 
-class EasypanelContractTester {
-  async getService(projectName, serviceName) {
-    return { name: serviceName, projectName, status: 'running' }
-  }
-  async updateEnv(projectName, serviceName, env) {
-    return { success: true }
-  }
-  async deploy(projectName, serviceName) {
-    return { success: true }
-  }
-  async getStatus(projectName, serviceName) {
-    return { status: 'running', healthy: true, serviceName, projectName }
-  }
-}
-
 async function runTests() {
   console.log('=====================================================')
   console.log('🧪 INICIANDO BATERIA DE TESTES E2E: SECRETS E IAM')
@@ -102,8 +87,24 @@ async function runTests() {
   if (nsRes.status !== 201) throw new Error('Falha ao criar namespace: esperado HTTP 201')
   const namespaceId = nsData.namespace.id
 
-  // 6. Criar Secret Bindings por referência
-  console.log('\n5️⃣ Registrando Secret Bindings por referência (Zero Leaks)...')
+  // 6. Testar Zero Secret Leaks: Envio de secret_value por agente DEVE ser rejeitado com HTTP 400
+  console.log('\n5️⃣ Validando Política Zero Secret Leaks (rejeição de secret_value em chamadas de agente)...')
+  const leakTestRes = await fetch(`${baseUrl}/api/control-tower/secrets/bindings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${fluxJwtToken}`
+    },
+    body: JSON.stringify({
+      namespace_id: namespaceId,
+      bindings: [{ secret_name: 'TEST_LEAK', secret_value: 'raw_leak_attempt' }]
+    })
+  })
+  console.log(`Status rejeição de secret_value direto: ${leakTestRes.status} (Esperado: 400)`)
+  if (leakTestRes.status !== 400) throw new Error('FALHA DE SEGURANÇA: secret_value em texto aberto não foi rejeitado!')
+
+  // 7. Criar Secret Bindings estritamente por referência (Zero Leaks)
+  console.log('\n6️⃣ Registrando Secret Bindings estritamente por referência...')
   const bindRes = await fetch(`${baseUrl}/api/control-tower/secrets/bindings`, {
     method: 'POST',
     headers: {
@@ -116,14 +117,12 @@ async function runTests() {
         {
           secret_name: 'CONTROL_TOWER_AGENT_API_KEY',
           reference_path: 'fbr/services/agency-flux/CONTROL_TOWER_AGENT_API_KEY',
-          secret_value: 'synthetic-e2e-value-zero-leaks',
           provider: 'easypanel',
           environment: 'production'
         },
         {
           secret_name: 'CONTROL_TOWER_BASE_URL',
           reference_path: 'fbr/services/agency-flux/CONTROL_TOWER_BASE_URL',
-          secret_value: 'https://supabase-control-tower-api.fbr.news',
           provider: 'easypanel',
           environment: 'production'
         }
@@ -134,8 +133,8 @@ async function runTests() {
   console.log(`Status HTTP /secrets/bindings: ${bindRes.status} (Esperado: 201)`, bindData)
   if (bindRes.status !== 201) throw new Error('Falha ao registrar bindings: esperado HTTP 201')
 
-  // 7. Testar Ciclo de Vida: Revogação e Bloqueio Imediato
-  console.log('\n6️⃣ Testando Ciclo de Vida: Criação de Identidade Temporária e Revogação...')
+  // 8. Testar Ciclo de Vida: Revogação e Bloqueio Imediato
+  console.log('\n7️⃣ Testando Ciclo de Vida: Criação de Identidade Temporária e Revogação...')
   const tempRes = await fetch(`${baseUrl}/api/control-tower/identities`, {
     method: 'POST',
     headers: {
@@ -174,28 +173,8 @@ async function runTests() {
   // Limpeza de teste temporário
   await supabase.from('service_identities').delete().eq('id', tempId)
 
-  // 8. Testar Contrato EasypanelSecretsProvider (getService, updateEnv, deploy, getStatus)
-  console.log('\n7️⃣ Testando Contrato Easypanel (services.getService, services.updateEnv, services.deploy, services.getStatus)...')
-  const easypanelProvider = new EasypanelContractTester()
-  const serviceCheck = await easypanelProvider.getService('sistemas', 'agency-flux')
-  console.log('getService:', serviceCheck)
-
-  const updateEnvCheck = await easypanelProvider.updateEnv?.('sistemas', 'agency-flux', {
-    CONTROL_TOWER_BASE_URL: 'https://supabase-control-tower-api.fbr.news'
-  })
-  console.log('updateEnv:', updateEnvCheck)
-
-  const deployCheck = await easypanelProvider.deploy?.('sistemas', 'agency-flux')
-  console.log('deploy:', deployCheck)
-
-  const statusCheck = await easypanelProvider.getStatus?.('sistemas', 'agency-flux')
-  console.log(`getStatus: status=${statusCheck?.status} (Esperado: running)`)
-  if (statusCheck?.status !== 'running') {
-    throw new Error('Easypanel status falhou: esperado status running')
-  }
-
   console.log('\n=====================================================')
-  console.log('🎉 HOMOLOGAÇÃO COMPLETA: TODOS OS 7 CRITÉRIOS ATENDIDOS!')
+  console.log('🎉 HOMOLOGAÇÃO COMPLETA: TODOS OS CRITÉRIOS ATENDIDOS!')
   console.log('=====================================================')
 }
 

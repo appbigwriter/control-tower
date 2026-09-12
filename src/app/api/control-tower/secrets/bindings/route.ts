@@ -25,6 +25,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Campos obrigatórios: namespace_id, bindings (array)' }, { status: 400 })
     }
 
+    // Regra Zero Secret Leaks: chamadas de agents/services comuns não podem trafegar secret_value em texto aberto
+    const hasSecretValues = bindings.some(b => b.secret_value !== undefined && b.secret_value !== null)
+    if (hasSecretValues && principal.type !== 'admin') {
+      return NextResponse.json({
+        error: 'Zero Secret Leaks: O envio de secret_value em chamadas diretas de agentes não é permitido. Utilize apenas reference_path.'
+      }, { status: 400 })
+    }
+
     const supabase = createServiceRoleClient()
 
     // 1. Obter informações do namespace
@@ -60,31 +68,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Falha ao registrar bindings no banco de dados' }, { status: 500 })
     }
 
-    // 3. Se houver valores para injeção imediata no runtime do provedor, despachar via Adapter em memória
-    const secretsToInject = bindings
-      .filter(b => b.secret_value)
-      .map(b => ({
-        key_name: b.secret_name,
-        secret_value: b.secret_value,
-        reference_path: b.reference_path
-      }))
+    // 3. Se for uma chamada administrativa com valores para injeção via adapter
+    if (hasSecretValues && principal.type === 'admin') {
+      const secretsToInject = bindings
+        .filter(b => b.secret_value)
+        .map(b => ({
+          key_name: b.secret_name,
+          secret_value: b.secret_value,
+          reference_path: b.reference_path
+        }))
 
-    if (secretsToInject.length > 0) {
       try {
         const providerInstance = getSecretsProvider(ns.provider)
         await providerInstance.injectSecrets(ns.namespace, secretsToInject)
       } catch (provErr: any) {
         console.error('Falha na injeção via adapter:', provErr)
         return NextResponse.json({
-          message: 'Bindings registrados no catálogo, porém ocorreu aviso na injeção do provider',
-          warning: provErr.message,
+          error: 'Falha na injeção do provider: ' + provErr.message,
           bindings: savedBindings
-        }, { status: 207 })
+        }, { status: 502 })
       }
     }
 
     return NextResponse.json({
-      message: 'Bindings de secrets registrados e vinculados com sucesso',
+      message: 'Bindings de secrets registrados por referência com sucesso',
       bindings: savedBindings
     }, { status: 201 })
 
