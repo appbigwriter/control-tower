@@ -180,5 +180,8 @@ async function runTests() {
 
 runTests().catch(err => {
   console.error('\n❌ ERRO NA EXECUÇÃO DOS TESTES:', err)
+  if (err.cause) {
+    console.error('🔍 Causa detalhada (err.cause):', err.cause)
+  }
   process.exit(1)
 })
