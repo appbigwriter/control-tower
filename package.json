@@ -1,10 +1,14 @@
 {
   "name": "gestaodb",
   "private": true,
+  "type": "module",
   "version": "0.1.0",
   "description": "Control Tower para catalogo, provisionamento e governanca de projetos em Supabase.",
   "scripts": {
     "dev": "next dev",
+    "test": "node --experimental-strip-types --test tests/easypanel-adapter.test.ts",
+    "contract:fixture": "node --experimental-strip-types scripts/easypanel-contract-fixture.mjs",
+    "easypanel:homologation": "node --experimental-strip-types scripts/easypanel-homologation.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "npm run typecheck",
