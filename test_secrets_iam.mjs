@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 const baseUrl = process.env.CONTROL_TOWER_BASE_URL || 'http://localhost:3000'
-const adminSecret = process.env.CONTROL_TOWER_ADMIN_SECRET || process.env.CONTROL_TOWER_AGENT_API_KEY
+const adminSecret = process.env.CONTROL_TOWER_ADMIN_SECRET
 if (!adminSecret) {
   throw new Error('CONTROL_TOWER_ADMIN_SECRET must be injected by the runtime')
 }
