@@ -40,12 +40,12 @@ Para que o agente converse com o Control Tower, configure as seguintes variávei
 
 ```env
 CONTROL_TOWER_BASE_URL=http://localhost:3000
-CONTROL_TOWER_AGENT_API_KEY=ct_agent_live_9f8d2e4a7c1b50638e12d4a982e0b73c
+CONTROL_TOWER_AGENT_API_KEY=<secret-manager:fbr/services/agency-flux/CONTROL_TOWER_AGENT_API_KEY>
 ```
 
 Em todas as requisições HTTP, inclua o cabeçalho:
 ```http
-Authorization: Bearer ct_agent_live_9f8d2e4a7c1b50638e12d4a982e0b73c
+Authorization: Bearer <secret-manager:fbr/services/agency-flux/CONTROL_TOWER_AGENT_API_KEY>
 ```
 *(ou utilize o cabeçalho alternativo `x-api-key: <CONTROL_TOWER_AGENT_API_KEY>`)*.
 

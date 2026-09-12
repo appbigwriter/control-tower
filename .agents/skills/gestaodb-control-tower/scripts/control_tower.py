@@ -12,7 +12,7 @@ import urllib.request
 import urllib.error
 
 BASE_URL = os.environ.get("CONTROL_TOWER_BASE_URL", "http://localhost:3000")
-API_KEY = os.environ.get("CONTROL_TOWER_AGENT_API_KEY", "ct_agent_live_9f8d2e4a7c1b50638e12d4a982e0b73c")
+API_KEY = os.environ.get("CONTROL_TOWER_AGENT_API_KEY", "<secret-manager:fbr/services/agency-flux/CONTROL_TOWER_AGENT_API_KEY>")
 
 def request_api(path: str, method: str = "GET", data: dict = None):
     url = f"{BASE_URL.rstrip('/')}{path}"

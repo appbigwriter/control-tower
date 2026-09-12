@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
 const baseUrl = 'http://localhost:3000'
-const adminSecret = process.env.CONTROL_TOWER_ADMIN_SECRET || 'ct_admin_live_7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f'
+const adminSecret = process.env.CONTROL_TOWER_ADMIN_SECRET
+if (!adminSecret) {
+  throw new Error('CONTROL_TOWER_ADMIN_SECRET must be injected by the runtime')
+}
 
 async function runTests() {
   console.log('=====================================================')
@@ -98,7 +101,7 @@ async function runTests() {
         {
           secret_name: 'CONTROL_TOWER_AGENT_API_KEY',
           reference_path: 'fbr/services/agency-flux/CONTROL_TOWER_AGENT_API_KEY',
-          secret_value: fluxJwtToken,
+          secret_value: 'e2e-test-only-synthetic-value',
           provider: 'easypanel',
           environment: 'production'
         },
