@@ -6,9 +6,9 @@
   "description": "Control Tower para catalogo, provisionamento e governanca de projetos em Supabase.",
   "scripts": {
     "dev": "next dev",
-    "test": "node --experimental-strip-types --test tests/easypanel-adapter.test.ts",
+    "test": "node --experimental-strip-types --test tests/easypanel-adapter.test.ts tests/easypanel-homologation.test.mjs",
     "contract:fixture": "node --experimental-strip-types scripts/easypanel-contract-fixture.mjs",
-    "easypanel:homologation": "node --experimental-strip-types scripts/easypanel-homologation.mjs",
+    "easypanel:homologation": "node scripts/easypanel-homologation.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "npm run typecheck",

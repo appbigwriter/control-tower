@@ -49,7 +49,7 @@ EASYPANEL_API_TOKEN=<runtime-secret-reference>
 EASYPANEL_PROJECT_NAME=projetos
 ```
 
-O adapter usa a API REST oficial do Easypanel 2.34.0, com `Authorization: Bearer`, e normaliza a URL para uma única base `/api`. O projeto vem de `EASYPANEL_PROJECT_NAME` e mantém `projetos` como default; o `serviceName` é dinâmico e deriva do namespace, por exemplo `fbr/gestaodb` → `gestaodb`.
+O adapter usa a API REST oficial do Easypanel 2.34.0, com `Authorization: Bearer <runtime-token>` e normaliza a URL para uma única base `/api`. O projeto vem de `EASYPANEL_PROJECT_NAME` e mantém `projetos` como default; o `serviceName` é dinâmico e deriva do namespace, por exemplo `fbr/gestaodb` → `gestaodb`.
 
 Endpoints oficiais usados:
 
@@ -82,8 +82,8 @@ O script abaixo exige apenas variáveis de runtime, usa um marcador não secreto
 EASYPANEL_API_URL=https://easypanel.example/api \
 EASYPANEL_API_TOKEN="$EASYPANEL_API_TOKEN" \
 EASYPANEL_PROJECT_NAME=projetos \
-EASYPANEL_HOMOLOGATION_NAMESPACE=homologation/unique-service \
-npm run easypanel:homologation
+EASYPANEL_HOMOLOGATION_NAMESPACE=fbr/services/flux-connection-test/ \
+node /app/scripts/easypanel-homologation.mjs
 ```
 
 A homologação remota não foi executada durante a validação local. Contrato detalhado: [`docs/easypanel-rest-contract.md`](docs/easypanel-rest-contract.md).

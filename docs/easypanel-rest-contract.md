@@ -71,8 +71,8 @@ The opt-in script uses only runtime variables and refuses to destroy a service t
 EASYPANEL_API_URL=https://easypanel.example/api \
 EASYPANEL_API_TOKEN="$EASYPANEL_API_TOKEN" \
 EASYPANEL_PROJECT_NAME=projetos \
-EASYPANEL_HOMOLOGATION_NAMESPACE=homologation/unique-service \
-npm run easypanel:homologation
+EASYPANEL_HOMOLOGATION_NAMESPACE=fbr/services/flux-connection-test/ \
+node /app/scripts/easypanel-homologation.mjs
 ```
 
 Do not place a token in source, shell history, documentation, or output. Remote homologation was not executed as part of local verification.
