@@ -60,6 +60,7 @@ export function readbackHasService(readback, projectName, serviceName) {
   const record = asRecord(readback)
   if (!record) return false
   if (projectNameOf(record) === projectName && serviceExistsInProject(record, serviceName)) return true
+  if (Array.isArray(record.services) && record.services.some((service) => serviceNameOf(service) === serviceName)) return true
   return Object.values(record).some((value) => readbackHasService(value, projectName, serviceName))
 }
 
