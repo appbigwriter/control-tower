@@ -5,6 +5,7 @@ import { DeveloperDocButton } from '@/components/control-tower/DeveloperDocButto
 import { FrontendAdsenseHandoffButton } from '@/components/control-tower/FrontendAdsenseHandoffButton'
 import { ProjectProvisionForm } from '@/components/control-tower/ProjectProvisionForm'
 import { DeleteProjectButton } from '@/components/control-tower/DeleteProjectButton'
+import { ProjectConfigurationButtons } from '@/components/control-tower/ProjectConfigurationButtons'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 
 export const dynamic = 'force-dynamic'
@@ -352,6 +353,7 @@ export default async function ControlTowerPage() {
                     <BigWriterHandoffButton slug={project.slug} />
                     <FrontendAdsenseHandoffButton slug={project.slug} />
                   </div>
+                  <ProjectConfigurationButtons slug={project.slug} />
                 </div>
               </div>
             </article>
