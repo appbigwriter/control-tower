@@ -5,8 +5,9 @@
 - **Contrato de referência:** `F:\Projetos\_FBR\AuthorityEngine\GLOBAL-FLOW-AUTHORITY-BLOGS-FLUX-CONTROL-TOWER.md`
 - **Owner de coordenação:** David
 - **Gate estrutural:** Sergio aprova migrations remotas, rotação de secrets, deploy e readback de produção.
-- **Estado geral:** planejada; execução ainda não iniciada.
-- **Regra:** nenhuma task é concluída por plano, build verde ou relato do agente. Cada item exige evidência objetiva e readback quando houver estado externo.
+- **Estado geral:** em execução local; implementação dos tracks GDB-REM-001 a GDB-REM-015 iniciada/reconciliada em commits locais; handoffs, build completo e readback remoto ainda pendentes.
+- **Override de execução:** o batch z.ai/GLM 5.2 falhou por limite de uso, mas a implementação local foi iniciada diretamente nesta sessão a partir do estado commitado. Os estados individuais `bloqueada` por provider permanecem como histórico do dispatch e não autorizam declarar aceite. Nenhuma migration remota, deploy, rotação de secrets ou publicação foi executada.
+- **Evidência atual:** commits `4ca0b62`, `bc012af`, `26e43ad`; `npm test` 42/42; `npm run typecheck` exit 0; `npm run build` não verificado nesta execução por bloqueio de timeout/consentimento do runtime.
 
 ## Ordem de execução
 
