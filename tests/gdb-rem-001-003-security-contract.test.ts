@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises'
  * derivation, RPC hardening, audit calls).
  */
 const root = new URL('../', import.meta.url)
-const text = (relative) => readFile(new URL(relative, root), 'utf8')
+const text = (relative: string) => readFile(new URL(relative, root), 'utf8')
 
 // ---------------------------------------------------------------------------
 // GDB-REM-001 — identities route hardening

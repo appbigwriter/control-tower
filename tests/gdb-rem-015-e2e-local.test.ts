@@ -16,7 +16,7 @@ test('E2E local: fluxo completo com provider saudável publica somente após tod
   assert.equal(result.steps.length, 10)
 
   // Readback confirmations per leg
-  const byLeg = Object.fromEntries(result.steps.map((s) => [s.leg, s.detail]))
+  const byLeg: Record<string, any> = Object.fromEntries(result.steps.map((s) => [s.leg, s.detail]))
   assert.equal(byLeg['flux.approvalEventIdempotent'].replay_same_job, true)
   assert.ok(String(byLeg['blogs.handoffNamespace'].namespace).startsWith('fbr/blogs/'))
   assert.equal(byLeg['controlTower.bindingsLifecycle'].binding_statuses.length, 1)
