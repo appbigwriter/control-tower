@@ -13,7 +13,7 @@ test('E2E local: fluxo completo com provider saudável publica somente após tod
 
   assert.ok(result.ok, `pernas falhas: ${result.blockReasons.join('; ')}`)
   assert.ok(!result.publicationBlocked)
-  assert.equal(result.steps.length, 9)
+  assert.equal(result.steps.length, 10)
 
   // Readback confirmations per leg
   const byLeg = Object.fromEntries(result.steps.map((s) => [s.leg, s.detail]))

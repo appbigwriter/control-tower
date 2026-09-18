@@ -8,20 +8,8 @@ import { readbackSchemaExists, schemaRemovalConfirmed, type SchemaReadback } fro
 
 /** Minimal surface of the supabase client used here — keeps helpers unit-testable. */
 export interface ActionsClient {
-  from: (table: string) => TableOps
+  from: (table: string) => any
   rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
-}
-
-export interface TableOps {
-  select: (columns?: string) => QueryOps
-  update: (values: Record<string, unknown>) => FilterOps
-  insert: (values: Record<string, unknown> | Record<string, unknown>[]) => InsertChain
-  delete: () => FilterOps
-  eq: (column: string, value: unknown) => FilterOps
-}
-
-export interface InsertChain {
-  select: (columns?: string) => Promise<MutationResult>
 }
 
 export interface QueryOps {

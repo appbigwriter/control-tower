@@ -200,8 +200,12 @@ export function mockActionsClient(state: MockState, faults: FaultPlan = {}): Act
       },
       delete: () => ({
         eq: async (column: string, value: unknown) => {
-          if (table === 'projects' && column === 'id') {
-            state.projects.delete(String(value))
+          if (table === 'projects' && (column === 'id' || column === 'slug')) {
+            for (const [key, p] of state.projects.entries()) {
+              if (p.id === String(value) || p.slug === String(value) || key === String(value)) {
+                state.projects.delete(key)
+              }
+            }
           }
           return { data: null, error: null }
         },
@@ -493,7 +497,7 @@ export async function runLocalE2E(options?: { providerFail?: boolean; breakAudit
     : actionsClient
   const archiveResult = await archiveProject(archiveClient, project, 'e2e-local-runner')
   const archiveAuditPersisted = state.auditLogs.some((a) => a.action === 'project.archived' && a.project_id === projectId)
-  const archiveOk = archiveResult.ok === archiveAuditPersisted && (options?.breakAuditMidArchive ? !archiveResult.ok : archiveResult.ok)
+  const archiveOk = archiveResult.ok && archiveAuditPersisted
   steps.push({
     leg: 'controlTower.archiveAuditGuarantee',
     ok: archiveOk,
@@ -503,6 +507,7 @@ export async function runLocalE2E(options?: { providerFail?: boolean; breakAudit
       project_status_after: state.projects.get(blogSlug)?.status,
     },
   })
+  if (!archiveOk) blockReasons.push('archive: falha no audit bloqueia operação')
 
   // ---- Leg 8: delete gated by explicit confirmation + readback before catalog drop ----
   const confirmOk = deleteConfirmationValid({ confirm: true, slug: blogSlug }, blogSlug)

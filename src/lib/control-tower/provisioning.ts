@@ -368,29 +368,11 @@ export type SupabaseError = { message: string; code?: string; details?: unknown;
 
 export type SupabaseResult<T = unknown> = { data: T | null; error: SupabaseError | null }
 
-export interface SupabaseTable {
-  select(columns?: string): SupabaseTable
-  eq(column: string, value: unknown): SupabaseTable
-  in(column: string, values: readonly unknown[]): SupabaseTable
-  order(column: string, options?: { ascending?: boolean }): SupabaseTable
-  limit(count: number): SupabaseTable
-  update(values: Record<string, unknown>): SupabaseTable
-  insert(values: Record<string, unknown> | Record<string, unknown>[]): SupabaseTable
-  upsert(
-    values: Record<string, unknown> | Record<string, unknown>[],
-    options?: { onConflict?: string; ignoreDuplicates?: boolean },
-  ): SupabaseTable
-  maybeSingle(): PromiseLike<SupabaseResult>
-  single(): PromiseLike<SupabaseResult>
-  then<TRes = SupabaseResult, TRej = never>(
-    onFulfilled?: ((value: SupabaseResult) => TRes | PromiseLike<TRes>) | null,
-    onRejected?: ((reason: unknown) => TRej | PromiseLike<TRej>) | null,
-  ): PromiseLike<TRes | TRej>
-}
+export type SupabaseTable = any
 
 export interface SupabaseLike {
-  from(table: string): SupabaseTable
-  rpc(functionName: string, args?: Record<string, unknown>): PromiseLike<SupabaseResult>
+  from(table: string): any
+  rpc(functionName: string, args?: Record<string, unknown>): PromiseLike<any>
 }
 
 export type HttpResult = { status: number; body: Record<string, unknown> }

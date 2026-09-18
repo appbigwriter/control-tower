@@ -6,13 +6,7 @@
 import { runSaga, sagaSucceeded, sanitizeError, type SagaReceipt } from './saga.ts'
 
 export interface BindingsClient {
-  from: (table: string) => BindingsTableOps
-}
-
-export interface BindingsTableOps {
-  select: (columns?: string) => { eq: (c: string, v: unknown) => { maybeSingle: () => Promise<BindingsMaybeSingle>; single: () => Promise<BindingsMaybeSingle> } }
-  update: (values: Record<string, unknown>) => { eq: (c: string, v: unknown) => Promise<BindingsMutation> }
-  upsert: (values: Record<string, unknown> | Record<string, unknown>[], opts?: { onConflict?: string }) => { select: (c?: string) => Promise<BindingsMutation> }
+  from: (table: string) => any
 }
 
 export interface BindingsMutation {

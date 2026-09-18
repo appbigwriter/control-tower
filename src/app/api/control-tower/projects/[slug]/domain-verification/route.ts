@@ -84,7 +84,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (!body.force && !canTransitionDomainState(currentState, body.transition)) {
         return NextResponse.json(
           { error: `Transição inválida: ${currentState} → ${body.transition}` },
-          { status: 422 }),
+          { status: 422 }
+        )
       }
 
       const { error: upsertError } = await supabase

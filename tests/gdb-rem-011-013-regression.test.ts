@@ -470,6 +470,11 @@ function wrapTracking(client: ActionsClient, order: string[]): ActionsClient {
   const from = client.from.bind(client)
   return {
     rpc: async (fn, args) => {
+      if (fn === 'drop_project_schema') {
+        const slug = String(args?.p_project_slug ?? '')
+        const schema = `blog_${slug}`.replace(/-/g, '_')
+        order.push(`drop:${schema}`)
+      }
       if (fn === 'execute_project_schema_sql') {
         const m = String(args?.p_sql ?? '').match(/DROP SCHEMA IF EXISTS "([^"]+)"/)
         if (m) order.push(`drop:${m[1]}`)
