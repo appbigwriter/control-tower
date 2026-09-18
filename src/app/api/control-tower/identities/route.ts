@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, generateIdentityJwt, hasRequiredScope } from '@/lib/auth/control-tower'
+import { validateScopeGrant } from '@/lib/auth/service-identity-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,20 +24,30 @@ export async function POST(req: NextRequest) {
       namespace,
       identity_type = 'service',
       scopes = [],
-      expires_in = '365d',
-      created_by = principal.name
+      expires_in = '365d'
     } = body
 
     if (!name || !namespace) {
       return NextResponse.json({ error: 'Campos obrigatórios: name, namespace' }, { status: 400 })
     }
 
-    if (!['agent', 'service', 'admin'].includes(identity_type)) {
-      return NextResponse.json({ error: 'identity_type inválido. Permitidos: agent, service, admin' }, { status: 400 })
+    if (typeof name !== 'string' || typeof namespace !== 'string') {
+      return NextResponse.json({ error: 'name e namespace devem ser strings' }, { status: 400 })
     }
 
-    if (identity_type === 'admin' && principal.type !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Apenas administradores podem criar identidades do tipo admin' }, { status: 403 })
+    // GDB-REM-001: server-side scope catalog + privilege containment.
+    // Wildcard and non-catalogued scopes are rejected for non-admin grantors;
+    // a non-admin grantor can only grant scopes it already holds; identity
+    // type 'admin' is reserved for admin grantors.
+    const grant = validateScopeGrant({
+      requestedScopes: scopes,
+      grantorType: principal.type,
+      grantorScopes: principal.scopes,
+      targetIdentityType: identity_type
+    })
+
+    if (!grant.ok) {
+      return NextResponse.json({ error: `Forbidden: ${grant.reason}` }, { status: 403 })
     }
 
     const supabase = createServiceRoleClient()
@@ -52,16 +63,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Já existe uma Service Identity com esse name ou namespace' }, { status: 409 })
     }
 
+    // GDB-REM-001: `created_by` is ALWAYS derived from the authenticated
+    // principal on the server side. A client-supplied value is ignored.
+    const actorRef = principal.identityId
+      ? `${principal.name}#${principal.identityId}`
+      : `${principal.name}`
+
     const newIdentityData = {
       name,
       namespace,
       identity_type,
-      scopes,
+      scopes: grant.scopes,
       status: 'active',
       issuer: 'control-tower',
       audience: 'fbr-agency',
       key_id: 'ct-key-v1',
-      created_by,
+      created_by: actorRef,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -73,11 +90,33 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error || !identity) {
-      console.error('Erro ao criar identity:', error)
+      console.error('Erro ao criar identity:', error?.message)
       return NextResponse.json({ error: 'Falha ao registrar Service Identity no banco de dados' }, { status: 500 })
     }
 
-    const token = await generateIdentityJwt(identity, expires_in)
+    // Audit trail (sanitized — no token, no scopes payload beyond names).
+    await supabase.from('audit_logs').insert({
+      action: 'identity.created',
+      resource_type: 'service_identity',
+      resource_id: identity.id,
+      metadata: {
+        actor: actorRef,
+        identity_name: identity.name,
+        identity_type: identity.identity_type,
+        granted_scopes: grant.scopes
+      }
+    })
+
+    // generateIdentityJwt validates expires_in (duration string within
+    // [60s, 365d]) and fails closed on invalid values.
+    let token: string
+    try {
+      token = await generateIdentityJwt(identity, expires_in)
+    } catch (jwtError) {
+      // Identity row exists but no over-privileged/over-long token is issued.
+      const message = jwtError instanceof Error ? jwtError.message : 'expires_in inválido'
+      return NextResponse.json({ error: message, identity_id: identity.id }, { status: 422 })
+    }
 
     return NextResponse.json({
       message: 'Service Identity criada com sucesso',
@@ -91,14 +130,16 @@ export async function POST(req: NextRequest) {
         issuer: identity.issuer,
         audience: identity.audience,
         key_id: identity.key_id,
+        expires_at: identity.expires_at,
+        created_by: identity.created_by,
         created_at: identity.created_at
       },
       token
     }, { status: 201 })
 
   } catch (error: any) {
-    console.error('API Error /identities:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('API Error /identities:', error?.message)
+    return NextResponse.json({ error: 'Erro interno ao processar a requisição' }, { status: 500 })
   }
 }
 
@@ -109,6 +150,10 @@ export async function GET(req: NextRequest) {
 
     if (!principal) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (!hasRequiredScope(principal, 'identities:read') && principal.type !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden: Escopo identities:read necessário' }, { status: 403 })
     }
 
     const supabase = createServiceRoleClient()
@@ -123,6 +168,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ identities }, { status: 200 })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno ao listar identities' }, { status: 500 })
   }
 }

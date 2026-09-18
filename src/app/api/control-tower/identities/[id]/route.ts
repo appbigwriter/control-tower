@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken } from '@/lib/auth/control-tower'
+import { validateScopeGrant } from '@/lib/auth/service-identity-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,23 @@ export async function PATCH(
     const body = await req.json()
     const { status, scopes } = body
 
+    const supabase = createServiceRoleClient()
+
+    // Fetch current identity so a scope change is validated against the
+    // identity's actual type (wildcard stays admin-only, catalog enforced).
+    let identityType: 'agent' | 'service' | 'admin' = 'service'
+    if (scopes !== undefined) {
+      const { data: current } = await supabase
+        .from('service_identities')
+        .select('identity_type')
+        .eq('id', id)
+        .maybeSingle()
+      if (!current) {
+        return NextResponse.json({ error: 'Service Identity não encontrada' }, { status: 404 })
+      }
+      identityType = current.identity_type
+    }
+
     const updateData: Record<string, any> = {
       updated_at: new Date().toISOString()
     }
@@ -64,11 +82,24 @@ export async function PATCH(
       }
     }
 
-    if (scopes && Array.isArray(scopes)) {
-      updateData.scopes = scopes
+    if (scopes !== undefined) {
+      // GDB-REM-001: PATCH goes through the same catalog + containment rules
+      // as creation; wildcard on a non-admin identity is rejected here too.
+      const grant = validateScopeGrant({
+        requestedScopes: scopes,
+        grantorType: principal.type,
+        grantorScopes: principal.scopes,
+        targetIdentityType: identityType
+      })
+      if (!grant.ok) {
+        return NextResponse.json({ error: `Forbidden: ${grant.reason}` }, { status: 403 })
+      }
+      updateData.scopes = grant.scopes
     }
 
-    const supabase = createServiceRoleClient()
+    const actorRef = principal.identityId
+      ? `${principal.name}#${principal.identityId}`
+      : `${principal.name}`
     const { data: updatedIdentity, error } = await supabase
       .from('service_identities')
       .update(updateData)
@@ -79,6 +110,18 @@ export async function PATCH(
     if (error || !updatedIdentity) {
       return NextResponse.json({ error: 'Falha ao atualizar Service Identity' }, { status: 500 })
     }
+
+    // Audit trail (sanitized — no tokens, no SQL, no secret material).
+    await supabase.from('audit_logs').insert({
+      action: status === 'revoked' ? 'identity.revoked' : 'identity.updated',
+      resource_type: 'service_identity',
+      resource_id: id,
+      metadata: {
+        actor: actorRef,
+        status: updatedIdentity.status,
+        updated_fields: Object.keys(updateData).filter((key) => key !== 'updated_at')
+      }
+    })
 
     return NextResponse.json({
       message: `Service Identity atualizada para status '${updatedIdentity.status}'`,

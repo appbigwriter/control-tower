@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, hasRequiredScope } from '@/lib/auth/control-tower'
 import { getSecretsProvider } from '@/lib/secrets/adapter'
+import {
+  registerBindingsWithLifecycle,
+  type BindingsClient,
+  type NamespaceRow,
+} from '@/lib/control-tower/bindings'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,10 +38,10 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    const supabase = createServiceRoleClient()
+    const client = createServiceRoleClient() as unknown as BindingsClient
 
     // 1. Obter informações do namespace
-    const { data: ns, error: nsError } = await supabase
+    const { data: ns, error: nsError } = await client
       .from('secret_namespaces')
       .select('id, namespace, provider')
       .eq('id', namespace_id)
@@ -46,55 +51,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Namespace não encontrado' }, { status: 404 })
     }
 
-    // 2. Gravar apenas as referências no banco (Zero Secret Leaks)
-    const recordsToUpsert = bindings.map(b => ({
-      namespace_id,
-      secret_name: b.secret_name,
-      reference_path: b.reference_path || `${ns.namespace}${b.secret_name}`,
-      provider: b.provider || ns.provider || 'easypanel',
-      environment: b.environment || 'production',
-      status: 'active',
-      created_by: principal.name,
-      updated_at: new Date().toISOString()
-    }))
+    // 2. GDB-REM-012 lifecycle: pending → provider injection → active (com compensação).
+    // Nunca mais binding `active` sem confirmação externa do provider.
+    const result = await registerBindingsWithLifecycle(client, {
+      namespace: ns as NamespaceRow,
+      bindings,
+      actor: principal.name,
+      isAdmin: principal.type === 'admin',
+      getProvider: getSecretsProvider,
+    })
 
-    const { data: savedBindings, error: bindError } = await supabase
-      .from('secret_bindings')
-      .upsert(recordsToUpsert, { onConflict: 'namespace_id,secret_name,environment' })
-      .select('id, namespace_id, secret_name, reference_path, provider, environment, status, created_at, updated_at')
-
-    if (bindError) {
-      console.error('Erro ao salvar secret bindings:', bindError)
-      return NextResponse.json({ error: 'Falha ao registrar bindings no banco de dados' }, { status: 500 })
-    }
-
-    // 3. Se for uma chamada administrativa com valores para injeção via adapter
-    if (hasSecretValues && principal.type === 'admin') {
-      const secretsToInject = bindings
-        .filter(b => b.secret_value)
-        .map(b => ({
-          key_name: b.secret_name,
-          secret_value: b.secret_value,
-          reference_path: b.reference_path
-        }))
-
-      try {
-        const providerInstance = getSecretsProvider(ns.provider)
-        await providerInstance.injectSecrets(ns.namespace, secretsToInject)
-      } catch (provErr: any) {
-        console.error('Falha na injeção via adapter:', provErr)
-        return NextResponse.json({
-          error: 'Falha na injeção do provider: ' + provErr.message,
-          bindings: savedBindings
-        }, { status: 502 })
-      }
-    }
-
-    return NextResponse.json({
-      message: 'Bindings de secrets registrados por referência com sucesso',
-      bindings: savedBindings
-    }, { status: 201 })
-
+    return NextResponse.json(
+      result.ok
+        ? { message: result.message, bindings: result.bindings, receipt: result.sagaReceipt }
+        : { error: result.message, bindings: result.bindings, receipt: result.sagaReceipt },
+      { status: result.httpStatus },
+    )
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

@@ -1,6 +1,12 @@
 import { cookies } from 'next/headers'
 import { jwtVerify, SignJWT } from 'jose'
 import { createClient } from '@supabase/supabase-js'
+import {
+  parseDurationToSeconds,
+  sanitizeScopesForIdentityType,
+  hasRequiredScope as policyHasRequiredScope,
+  type PrincipalType
+} from './service-identity-policy'
 
 export const CONTROL_TOWER_COOKIE = 'ct_admin_session'
 
@@ -117,7 +123,14 @@ export async function authenticateToken(rawToken: string | undefined | null): Pr
       type: 'service',
       name: 'fbr-agency-flux-service',
       namespace: 'fbr/services/agency-flux/',
-      scopes: ['projects:read', 'projects:provision', 'projects:sql:execute', 'secrets:namespaces:create', 'secrets:bindings:write', 'health:read']
+      scopes: sanitizeScopesForIdentityType('service', [
+        'projects:read',
+        'projects:provision',
+        'ct:sql:execute',
+        'secrets:namespaces:create',
+        'secrets:bindings:write',
+        'health:read'
+      ])
     }
   }
 
@@ -133,7 +146,11 @@ export async function authenticateToken(rawToken: string | undefined | null): Pr
     const identityId = payload.sub as string
     if (!identityId) return null
 
-    // 3. Check revocation and status in database (Zero Trust validation)
+    // GDB-REM-001: JWT is validated against the database record (zero trust).
+    // The scopes carried inside the token claims are NEVER trusted; the
+    // authoritative scope list is the one persisted in service_identities,
+    // and it is sanitized so a poisoned/legacy row can never grant wildcard
+    // or non-catalogued scopes to a non-admin identity.
     const supabase = getSupabaseClient()
     const { data: identity, error } = await supabase
       .from('service_identities')
@@ -163,10 +180,10 @@ export async function authenticateToken(rawToken: string | undefined | null): Pr
     ).catch(() => {})
 
     return {
-      type: identity.identity_type as 'admin' | 'service' | 'agent',
+      type: identity.identity_type as PrincipalType,
       name: identity.name,
       namespace: identity.namespace,
-      scopes: identity.scopes || [],
+      scopes: sanitizeScopesForIdentityType(identity.identity_type, identity.scopes),
       identityId: identity.id
     }
   } catch (err) {
@@ -179,26 +196,40 @@ export async function isValidAgentApiKey(token: string | undefined | null): Prom
   return principal !== null
 }
 
-export async function generateIdentityJwt(identity: ServiceIdentityRecord, expiresIn = '365d'): Promise<string> {
+export async function generateIdentityJwt(
+  identity: ServiceIdentityRecord,
+  expiresIn = '365d'
+): Promise<string> {
+  // GDB-REM-001: expiry must be a validated duration string within
+  // [60s, 365d]. Anything else fails closed instead of falling back to the
+  // 365d default and issuing an over-long-lived token.
+  const seconds = parseDurationToSeconds(expiresIn)
+  if (seconds === null) {
+    throw new Error(
+      'expires_in inválido: use uma duração como 30m, 12h, 90d (mínimo 60s, máximo 365d)'
+    )
+  }
+
+  // Defense in depth: a non-admin identity never has wildcard or
+  // non-catalogued scopes embedded in the issued JWT.
+  const scopes = sanitizeScopesForIdentityType(identity.identity_type, identity.scopes)
+
   const secret = new TextEncoder().encode(getJwtSecret())
   return await new SignJWT({
     sub: identity.id,
     name: identity.name,
     namespace: identity.namespace,
     identity_type: identity.identity_type,
-    scopes: identity.scopes
+    scopes
   })
     .setProtectedHeader({ alg: 'HS256', kid: identity.key_id || 'ct-key-v1' })
     .setIssuer(identity.issuer || 'control-tower')
     .setAudience(identity.audience || 'fbr-agency')
     .setIssuedAt()
-    .setExpirationTime(expiresIn)
+    .setExpirationTime(`${seconds}s`)
     .sign(secret)
 }
 
 export function hasRequiredScope(principal: AuthenticatedPrincipal, requiredScope: string): boolean {
-  if (principal.scopes.includes('*') || principal.type === 'admin') {
-    return true
-  }
-  return principal.scopes.includes(requiredScope)
+  return policyHasRequiredScope(principal, requiredScope)
 }

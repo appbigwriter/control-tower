@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
+import { authenticateToken, hasRequiredScope } from '@/lib/auth/control-tower'
 import { buildArtifact, type ArtifactType } from '@/lib/control-tower/project-configuration'
 
 export const dynamic = 'force-dynamic'
 
 const artifactTypes: ArtifactType[] = ['public_variables', 'namespace', 'validation_domain']
 
+async function authorize(req: NextRequest, scope: string) {
+  const principal = await authenticateToken(req.headers.get('authorization'))
+  if (!principal) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  if (!hasRequiredScope(principal, scope)) return NextResponse.json({ error: `Scope ${scope} required` }, { status: 403 })
+  return principal
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   try {
+    const denied = await authorize(req, 'projects:provision')
+    if (denied instanceof NextResponse) return denied
     const { slug } = await params
     const body = await req.json() as { type?: ArtifactType }
     const type = body.type
@@ -36,7 +46,7 @@ export async function POST(
         project_id: project.id,
         artifact_type: type,
         payload: { value: artifact.value, filename: artifact.filename },
-        created_by: 'admin-panel',
+        created_by: 'authenticated-control-tower',
         updated_at: new Date().toISOString(),
       }, { onConflict: 'project_id,artifact_type' })
       .select('id, project_id, artifact_type, payload, created_at, updated_at')
@@ -54,9 +64,11 @@ export async function POST(
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
+  const denied = await authorize(req, 'projects:read')
+  if (denied instanceof NextResponse) return denied
   const { slug } = await params
   const supabase = createServiceRoleClient()
   const { data: project, error: projectError } = await supabase.from('projects').select('id').eq('slug', slug).single()

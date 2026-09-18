@@ -1,0 +1,33 @@
+{
+  "scope": "local-only",
+  "remoteMutation": false,
+  "secretValues": [],
+  "existingRoutes": {
+    "projectCreate": "/api/control-tower/projects",
+    "configuration": "/api/control-tower/projects/[slug]/configuration",
+    "health": "/api/control-tower/health",
+    "secretNamespaces": "/api/control-tower/secrets/namespaces",
+    "secretBindings": "/api/control-tower/secrets/bindings"
+  },
+  "acceptance": {
+    "project": "provision_project",
+    "schema": "create_*_schema with if not exists",
+    "publicArtifact": "public_variables",
+    "namespace": "unique namespace with upsert",
+    "secretRef": "reference_path only",
+    "health": "https://<configured-domain>/health",
+    "readback": "GET configuration after POST",
+    "idempotency": [
+      "project_configuration_artifacts(project_id, artifact_type)",
+      "secret_namespaces(namespace)",
+      "secret_bindings(namespace_id, secret_name, environment)"
+    ]
+  },
+  "expectedStatus": {
+    "localDefinitions": "implemented",
+    "localContractTest": "verified",
+    "remoteMigration": "pending",
+    "remoteReadback": "blocked",
+    "fluxRealIntegration": "pending"
+  }
+}
