@@ -14,7 +14,9 @@ import {
   provisionFingerprint,
   sanitizeError,
   validateBusinessTypeTemplatePair,
+  deriveHostingTarget,
   type HttpResult,
+  type HostingTarget,
   type SupabaseLike,
 } from '@/lib/control-tower/provisioning'
 
@@ -24,10 +26,33 @@ export type CreateProjectInput = {
   business_type: string
   template_key: string
   domain: string
+  repository_url: string
+  hosting_target: HostingTarget
   language: string
   organization_slug: string
 }
 
+function runtimeMetadata(input: CreateProjectInput) {
+  const target = deriveHostingTarget(input.hosting_target, input.name)
+  return {
+    repository_url: input.repository_url,
+    hosting_target: target.target,
+    hosting_project_name: target.projectName,
+    service_name: target.serviceName,
+  }
+}
+
+async function persistRuntimeMetadata(supabase: SupabaseLike, projectId: string, input: CreateProjectInput) {
+  const metadata = runtimeMetadata(input)
+  const { data, error } = await supabase
+    .from('projects')
+    .update(metadata)
+    .eq('id', projectId)
+    .select('id, repository_url, hosting_target, hosting_project_name, service_name')
+    .single()
+  if (error || !data) return { ok: false as const, error: error?.message ?? 'runtime metadata readback missing' }
+  return { ok: true as const, data }
+}
 export function parseCreateProjectBody(body: unknown): { ok: true; input: CreateProjectInput } | { ok: false; error: string } {
   if (!body || typeof body !== 'object') return { ok: false, error: 'Payload invalido: JSON objeto esperado' }
 
@@ -44,6 +69,12 @@ export function parseCreateProjectBody(body: unknown): { ok: true; input: Create
   }
   if (typeof raw.domain !== 'string' || raw.domain.trim().length === 0) {
     return { ok: false, error: 'Payload invalido: domain e obrigatorio' }
+  }
+  if (typeof raw.repository_url !== 'string' || !/^https?:\/\/[^\s]+$/i.test(raw.repository_url.trim())) {
+    return { ok: false, error: 'Payload invalido: repository_url deve ser uma URL http(s) obrigatoria' }
+  }
+  if (raw.hosting_target !== 'vps1' && raw.hosting_target !== 'vps2') {
+    return { ok: false, error: 'Payload invalido: hosting_target deve ser vps1 ou vps2' }
   }
 
   const language = raw.language === undefined ? 'pt' : raw.language
@@ -64,6 +95,8 @@ export function parseCreateProjectBody(body: unknown): { ok: true; input: Create
       business_type: String(raw.business_type ?? ''),
       template_key: raw.template_key,
       domain: raw.domain.trim(),
+      repository_url: raw.repository_url.trim(),
+      hosting_target: raw.hosting_target,
       language,
       organization_slug: organizationSlug,
     },
@@ -111,6 +144,8 @@ export async function createProjectHandler(
     domain: input.domain ?? null,
     language: input.language,
     organization_slug: input.organization_slug,
+    repository_url: input.repository_url,
+    hosting_target: input.hosting_target,
   })
 
   // 4) Organizacao
@@ -165,6 +200,9 @@ export async function createProjectHandler(
       const projectId = typeof legacyRpc.data === 'string' ? legacyRpc.data : (legacyRpc.data as any)?.id ?? legacyRpc.data
       const schemaPrefix = pair.businessType === 'blog' ? 'blog' : pair.businessType === 'store' ? 'store' : pair.businessType === 'saas' ? 'saas' : 'custom'
       const schemaName = `${schemaPrefix}_${input.slug}`
+
+      const runtime = await persistRuntimeMetadata(supabase, String(projectId), input)
+      if (!runtime.ok) return { status: 500, body: { error: sanitizeError(`Falha ao registrar target de runtime: ${runtime.error}`), code: 'GDB_RUNTIME_TARGET_READBACK_FAILED' } }
 
       return {
         status: 201,
@@ -234,6 +272,9 @@ export async function createProjectHandler(
     }
   }
 
+  const runtime = await persistRuntimeMetadata(supabase, result.project_id as string, input)
+  if (!runtime.ok) return { status: 500, body: { error: sanitizeError(`Falha ao registrar target de runtime: ${runtime.error}`), code: 'GDB_RUNTIME_TARGET_READBACK_FAILED' } }
+
   const httpStatus = result.status === 'replayed' || result.status === 'reconciled' ? 200 : 201
 
   return {
@@ -264,6 +305,8 @@ export function deriveKeyForUiCall(input: {
   domain?: string | null
   language: string
   organization_slug: string
+  repository_url: string
+  hosting_target: HostingTarget
 }): string {
   const fingerprint = provisionFingerprint({
     name: input.name,
@@ -273,6 +316,8 @@ export function deriveKeyForUiCall(input: {
     domain: input.domain ?? null,
     language: input.language,
     organization_slug: input.organization_slug,
+    repository_url: input.repository_url,
+    hosting_target: input.hosting_target,
   })
   return autoIdempotencyKey(fingerprint)
 }

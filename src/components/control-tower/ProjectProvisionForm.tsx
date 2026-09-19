@@ -19,6 +19,8 @@ export function ProjectProvisionForm() {
   const [businessType, setBusinessType] = useState<BusinessType>('blog')
   const [templateKey, setTemplateKey] = useState<TemplateKey>('blog_standard')
   const [domain, setDomain] = useState('')
+  const [repositoryUrl, setRepositoryUrl] = useState('')
+  const [hostingTarget, setHostingTarget] = useState<'vps1' | 'vps2'>('vps1')
   const [language, setLanguage] = useState<'pt' | 'en' | 'es'>('pt')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState<string | null>(null)
@@ -31,6 +33,7 @@ export function ProjectProvisionForm() {
   const handleBusinessTypeChange = (nextType: BusinessType) => {
     setBusinessType(nextType)
     setTemplateKey(templateByType[nextType])
+    setHostingTarget(nextType === 'custom' ? 'vps2' : 'vps1')
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -50,6 +53,8 @@ export function ProjectProvisionForm() {
           business_type: businessType,
           template_key: templateKey,
           domain,
+          repository_url: repositoryUrl,
+          hosting_target: hostingTarget,
           language,
         }),
       })
@@ -136,6 +141,30 @@ export function ProjectProvisionForm() {
       </label>
 
       <label className="grid gap-2">
+        <span className="text-xs uppercase tracking-[0.22em] text-neutral-400">Repository URL</span>
+        <input
+          type="url"
+          className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-cyan-300/40"
+          placeholder="https://github.com/org/projeto"
+          value={repositoryUrl}
+          onChange={(event) => setRepositoryUrl(event.target.value)}
+          required
+        />
+      </label>
+
+      <label className="grid gap-2">
+        <span className="text-xs uppercase tracking-[0.22em] text-neutral-400">Hosting target</span>
+        <select
+          className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
+          value={hostingTarget}
+          onChange={(event) => setHostingTarget(event.target.value as 'vps1' | 'vps2')}
+          required
+        >
+          <option value="vps1">VPS1 — projetos</option>
+          <option value="vps2">VPS2 — sistemas</option>
+        </select>
+      </label>
+      <label className="grid gap-2">
         <span className="text-xs uppercase tracking-[0.22em] text-neutral-400">Idioma</span>
         <select
           className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
@@ -170,6 +199,8 @@ export function ProjectProvisionForm() {
             setBusinessType('blog')
             setTemplateKey('blog_standard')
             setDomain('')
+            setRepositoryUrl('')
+            setHostingTarget('vps1')
             setLanguage('pt')
             setStatus('idle')
             setMessage(null)

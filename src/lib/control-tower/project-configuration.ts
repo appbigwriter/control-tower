@@ -103,6 +103,13 @@ export function buildRuntimeInventory(project: RuntimeContractProject, environme
   return [...derived, ...secrets, ...optional]
 }
 
+export function buildServiceName(project: Pick<RuntimeContractProject, 'name'>): string {
+  const firstName = project.name.trim().split(/\s+/)[0]?.toLowerCase() ?? ''
+  const serviceName = firstName.replace(/[^a-z0-9-]/g, '')
+  if (!serviceName) throw new Error('Nome do projeto não produz serviceName válido.')
+  return serviceName
+}
+
 export function buildRuntimeContract(project: RuntimeContractProject, environment: RuntimeEnvironment = 'development') {
   const inventory = buildRuntimeInventory(project, environment)
   return {
@@ -110,7 +117,7 @@ export function buildRuntimeContract(project: RuntimeContractProject, environmen
     project: { id: project.id, name: project.name, slug: project.slug, businessType: project.business_type, templateKey: project.template_key, templateVersion: project.template_version, schemaName: project.schema_name, domain: project.domain, language: project.language, status: project.status },
     environment,
     namespace: buildNamespace(project),
-    serviceName: project.slug,
+    serviceName: buildServiceName(project),
     inventory,
     states: ['generated', 'registered', 'delivered', 'verified'] as const,
     status: 'generated' as const,

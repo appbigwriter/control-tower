@@ -147,18 +147,42 @@ function observedStatus(readback: unknown): ObservedServiceStatus {
     : 'NOT_VERIFIED'
 }
 
+export type EasypanelTarget = 'vps1' | 'vps2'
+
+export function easypanelTargetEnv(target: EasypanelTarget) {
+  const prefix = target.toUpperCase()
+  return {
+    apiUrl: `EASYPANEL_${prefix}_API_URL`,
+    loginUser: `EASYPANEL_${prefix}_LOGIN_USER`,
+    loginPass: `EASYPANEL_${prefix}_LOGIN_PASS`,
+    apiToken: `EASYPANEL_${prefix}_API_TOKEN`,
+    projectName: `EASYPANEL_${prefix}_PROJECT_NAME`,
+  } as const
+}
+
 export class EasypanelSecretsProvider implements SecretsProvider {
   name = 'easypanel'
+  private readonly target?: EasypanelTarget
+
+  constructor(target?: EasypanelTarget) {
+    this.target = target
+  }
+
+  private get envNames() {
+    return this.target ? easypanelTargetEnv(this.target) : null
+  }
 
   private get apiUrl(): string {
-    const url = process.env.EASYPANEL_API_URL
-    if (!url) throw new Error('[EasypanelSecretsProvider] FAIL-CLOSED: EASYPANEL_API_URL não está configurada no runtime.')
+    const key = this.envNames?.apiUrl ?? 'EASYPANEL_API_URL'
+    const url = process.env[key]
+    if (!url) throw new Error(`[EasypanelSecretsProvider] FAIL-CLOSED: ${key} não está configurada no runtime.`)
     return normalizeEasypanelApiUrl(url)
   }
 
   private get apiToken(): string {
-    const token = process.env.EASYPANEL_API_TOKEN?.trim()
-    if (!token) throw new Error('[EasypanelSecretsProvider] FAIL-CLOSED: EASYPANEL_API_TOKEN obrigatória e ausente.')
+    const key = this.envNames?.apiToken ?? 'EASYPANEL_API_TOKEN'
+    const token = process.env[key]?.trim()
+    if (!token) throw new Error(`[EasypanelSecretsProvider] FAIL-CLOSED: ${key} obrigatória e ausente.`)
     return token
   }
 
@@ -169,7 +193,8 @@ export class EasypanelSecretsProvider implements SecretsProvider {
   public resolveProjectAndService(namespace: string): { projectName: string; serviceName: string } {
     const segments = namespace.trim().replace(/^\/+|\/+$/g, '').split('/').filter(Boolean)
     const serviceName = segments.at(-1)
-    const projectName = process.env.EASYPANEL_PROJECT_NAME?.trim() || 'projetos'
+    const projectKey = this.envNames?.projectName ?? 'EASYPANEL_PROJECT_NAME'
+    const projectName = process.env[projectKey]?.trim() || 'projetos'
     if (segments.length < 2 || !serviceName || !IDENTIFIER_PATTERN.test(serviceName)) {
       throw new Error('[EasypanelSecretsProvider] FAIL-CLOSED: namespace sem serviceName ou identificador inválido.')
     }
@@ -273,11 +298,11 @@ export class VaultSecretsProvider implements SecretsProvider {
   }
 }
 
-export function getSecretsProvider(providerName: string): SecretsProvider {
+export function getSecretsProvider(providerName: string, target?: EasypanelTarget): SecretsProvider {
   switch (providerName?.toLowerCase()) {
     case 'local': return new LocalSecretsProvider()
-    case 'easypanel': return new EasypanelSecretsProvider()
+    case 'easypanel': return new EasypanelSecretsProvider(target)
     case 'vault': return new VaultSecretsProvider()
-    default: return new EasypanelSecretsProvider()
+    default: return new EasypanelSecretsProvider(target)
   }
 }

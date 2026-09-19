@@ -8,6 +8,7 @@ import {
   renderRuntimeDeveloperDocument,
   buildRuntimeContract,
   buildRuntimeInventory,
+  buildServiceName,
 } from '../src/lib/control-tower/project-configuration.ts'
 
 const project = {
@@ -53,6 +54,11 @@ test('runtime contract gera inventário completo por ambiente sem valores secret
   assert.ok(inventory.some((item) => item.name === 'CONTROL_TOWER_SCHEMA_NAME' && item.value === project.schema_name))
   assert.ok(inventory.every((item) => item.value !== undefined || item.reference_path !== undefined))
   assert.ok(inventory.every((item) => !('secret_value' in item)))
+})
+
+test('serviceName deriva do primeiro nome do projeto', () => {
+  assert.equal(buildServiceName({ name: 'Authority Engine' }), 'authority')
+  assert.equal(buildServiceName({ name: 'FBR Ads' }), 'fbr')
 })
 
 test('runtime contract e Developer Document são sanitizados e versionados', () => {

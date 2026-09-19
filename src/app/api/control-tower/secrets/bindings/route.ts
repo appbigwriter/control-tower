@@ -24,7 +24,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { namespace_id, bindings } = body
+    const { namespace_id, bindings, hosting_target } = body
+    const easypanelTarget = hosting_target === 'vps1' || hosting_target === 'vps2' ? hosting_target : undefined
 
     if (!namespace_id || !bindings || !Array.isArray(bindings) || bindings.length === 0) {
       return NextResponse.json({ error: 'Campos obrigatórios: namespace_id, bindings (array)' }, { status: 400 })
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
       bindings,
       actor: principal.name,
       isAdmin: principal.type === 'admin',
-      getProvider: getSecretsProvider,
+      getProvider: (providerName) => getSecretsProvider(providerName, easypanelTarget),
     })
 
     return NextResponse.json(

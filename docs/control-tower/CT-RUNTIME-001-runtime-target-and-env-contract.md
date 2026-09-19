@@ -211,3 +211,35 @@ O Developer Document deve conter:
 - versão do contrato e timestamp.
 
 A automação de injeção em Easypanel/VPS e qualquer runner local ficam fora desta primeira entrega e só entram mediante novo Gate específico.
+
+## 11. Procedimento específico para projetos `custom`
+
+Projetos `custom` não são blogs disfarçados. O provisionamento deve separar infraestrutura da aplicação consumidora.
+
+### Custom Authority Engine
+
+- `business_type`: `custom`;
+- schema: `custom_authorityengine`;
+- runtime: VPS2;
+- domínio próprio do runtime: obrigatório, mas não é o domínio editorial do Blog Authority;
+- `repository_url`: obrigatório;
+- `hosting_target`: obrigatório;
+- `runtime_target`: obrigatório;
+- contrato de runtime: banco, owner, service identity, health e readback;
+- tabelas: somente o template custom e migrations específicas da aplicação;
+- não gerar handoff BigWriter/Frontend-AdSense;
+- não criar domínio `authority.fbr.news`;
+- não registrar o projeto como blog no FBR Blogs.
+
+### Blog Authority
+
+É outro projeto, com outro `project_id`, outro schema e outro runtime:
+
+- `business_type`: `blog`;
+- VPS1/Easypanel `projetos`;
+- service `authority`;
+- domínio `authority.fbr.news`;
+- FBR Blogs como consumidor editorial;
+- handoffs editorial/frontend somente neste projeto.
+
+O Control Tower deve bloquear a mistura de `project_id`, schema, namespace, repository, service, domínio e runtime entre os dois projetos. O ciclo do Authority Engine termina na aplicação de personas; o ciclo do Authority Blog só termina quando o FBR Blogs consumir e operar o projeto editorial.

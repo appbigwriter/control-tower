@@ -17,6 +17,17 @@ export const TEMPLATE_KEYS = ['blog_standard', 'store_standard', 'saas_standard'
 
 export type BusinessType = (typeof BUSINESS_TYPES)[number]
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number]
+export type HostingTarget = 'vps1' | 'vps2'
+
+export function deriveHostingTarget(target: HostingTarget, projectName: string) {
+  const serviceName = projectName.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z0-9-]/g, '') ?? ''
+  if (!serviceName) throw new Error('projectName não produz serviceName válido')
+  return {
+    target,
+    projectName: target === 'vps1' ? 'projetos' : 'sistemas',
+    serviceName,
+  }
+}
 
 /** Mapa canonico: blog->blog_standard, store->store_standard, saas->saas_standard, custom->custom_base. */
 export const TEMPLATE_FOR_BUSINESS_TYPE: Record<BusinessType, TemplateKey> = {
@@ -156,6 +167,8 @@ export function provisionFingerprint(input: {
   domain: string | null
   language: string
   organization_slug: string
+  repository_url: string
+  hosting_target: HostingTarget
 }): string {
   return computeRequestFingerprint({
     operation: 'provision_project',
@@ -166,6 +179,8 @@ export function provisionFingerprint(input: {
     domain: input.domain ?? null,
     language: input.language,
     organization_slug: input.organization_slug,
+    repository_url: input.repository_url,
+    hosting_target: input.hosting_target,
   })
 }
 
