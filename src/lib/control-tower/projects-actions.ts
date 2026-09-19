@@ -18,6 +18,7 @@ import {
   type HttpResult,
   type SupabaseLike,
 } from '@/lib/control-tower/provisioning'
+import { rebuildProjectSchema } from '@/lib/control-tower/actions'
 
 export type ProjectRecord = {
   id: string
@@ -136,6 +137,24 @@ export async function rebuildProject(
   })
 
   if (error) {
+    const isMissingV2 =
+      error.message?.includes('rebuild_project_schema_v2') ||
+      error.message?.includes('Could not find the function') ||
+      error.code === 'PGRST202' ||
+      error.code === '42883'
+
+    if (isMissingV2) {
+      const fallbackResult = await rebuildProjectSchema(supabase as any, project as any, 'control-tower-admin')
+      return {
+        status: fallbackResult.httpStatus,
+        body: {
+          message: fallbackResult.message,
+          job_status: fallbackResult.ok ? 'success' : 'error',
+          project_status: fallbackResult.ok ? 'active' : 'error',
+        },
+      }
+    }
+
     const message = sanitizeError(error.message)
     const code = extractGdbCode(message) ?? error.code ?? null
     return { status: mapGdbCodeToHttpStatus(code), body: { error: message, code } }

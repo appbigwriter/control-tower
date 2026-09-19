@@ -139,6 +139,46 @@ export async function createProjectHandler(
 
   // GDB-REM-005: tratar explicitamente o retorno { data, error }
   if (error) {
+    const isMissingV2 =
+      error.message?.includes('provision_project_v2') ||
+      error.message?.includes('Could not find the function') ||
+      error.code === 'PGRST202' ||
+      error.code === '42883'
+
+    // Fallback gracioso para provision_project legado (7 parâmetros) se a migration 012 ainda não foi aplicada
+    if (isMissingV2) {
+      const legacyRpc = await supabase.rpc('provision_project', {
+        p_name: input.name,
+        p_slug: input.slug,
+        p_business_type: pair.businessType,
+        p_template_key: pair.templateKey,
+        p_domain: input.domain ?? null,
+        p_language: input.language,
+        p_organization_id: organization?.id ?? null,
+      })
+
+      if (legacyRpc.error) {
+        const msg = sanitizeError(legacyRpc.error.message)
+        return { status: 500, body: { error: msg, code: extractGdbCode(msg) } }
+      }
+
+      const projectId = typeof legacyRpc.data === 'string' ? legacyRpc.data : (legacyRpc.data as any)?.id ?? legacyRpc.data
+      const schemaPrefix = pair.businessType === 'blog' ? 'blog' : pair.businessType === 'store' ? 'store' : pair.businessType === 'saas' ? 'saas' : 'custom'
+      const schemaName = `${schemaPrefix}_${input.slug}`
+
+      return {
+        status: 201,
+        body: {
+          message: 'Projeto provisionado com sucesso',
+          project_id: projectId,
+          project_status: 'active',
+          job_status: 'success',
+          idempotency: 'created',
+          schema_name: schemaName,
+        },
+      }
+    }
+
     const message = sanitizeError(error.message)
     const code = extractGdbCode(message) ?? error.code ?? null
     const status = mapGdbCodeToHttpStatus(code)
