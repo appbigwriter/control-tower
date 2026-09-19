@@ -25,7 +25,17 @@ export function DeleteProjectButton({
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Erro ao excluir banco')
+        const receipt = errorData?.receipt as {
+          failedStep?: string | null
+          error?: string | null
+          compensation?: Array<{ step?: string; ok?: boolean; error?: string | null }>
+        } | undefined
+        const compensation = receipt?.compensation?.length
+          ? ` Compensação: ${receipt.compensation.map((item) => `${item.step ?? 'step'}=${item.ok ? 'ok' : item.error ?? 'falhou'}`).join(', ')}.`
+          : ''
+        const detail = receipt?.error ? ` Detalhe: ${receipt.error}.` : ''
+        const failedStep = receipt?.failedStep ? ` Etapa: ${receipt.failedStep}.` : ''
+        throw new Error(`${errorData.error || 'Erro ao excluir banco'}${failedStep}${detail}${compensation}`)
       }
 
       router.refresh()
