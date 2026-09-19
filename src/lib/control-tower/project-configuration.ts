@@ -8,16 +8,26 @@ export type ProjectConfigurationProject = {
 export type ArtifactType = 'public_variables' | 'namespace' | 'validation_domain'
 
 export function buildPublicVariables(project: ProjectConfigurationProject) {
+  const namespace = `${buildNamespace(project)}/development`
+  const ref = (name: string) => `<secret-manager:${namespace}/${name}>`
   return {
-    PORT: '',
-    NODE_ENV: 'production',
-    APP_ENV: 'production',
-    CONTROL_TOWER_BASE_URL: 'control-tower.fbr.news',
+    PORT: '3400',
+    HOST: '0.0.0.0',
+    NODE_ENV: 'development',
+    APP_ENV: 'development',
+    CONTROL_TOWER_BASE_URL: 'https://control-tower.fbr.news',
     CONTROL_TOWER_PROJECT_ID: project.id,
     CONTROL_TOWER_SCHEMA_NAME: project.schema_name,
-    SUPABASE_URL: 'supabase-control-tower-api.fbr.news',
-    SUPABASE_ANON_KEY: '',
-    SUPABASE_SERVICE_ROLE_KEY: '',
+    AUTHORITY_PROJECT_ID: project.id,
+    AUTHORITY_OWNER_ID: ref('AUTHORITY_OWNER_ID'),
+    SUPABASE_URL: ref('SUPABASE_URL'),
+    DATABASE_URL: ref('DATABASE_URL'),
+    SUPABASE_SERVICE_ROLE_KEY: ref('SUPABASE_SERVICE_ROLE_KEY'),
+    AUTHORITY_ADMIN_TOKEN: ref('AUTHORITY_ADMIN_TOKEN'),
+    AUTHORITY_OPERATOR_TOKEN: ref('AUTHORITY_OPERATOR_TOKEN'),
+    AUTHORITY_REVIEWER_TOKEN: ref('AUTHORITY_REVIEWER_TOKEN'),
+    AUTHORITY_PUBLISHER_TOKEN: ref('AUTHORITY_PUBLISHER_TOKEN'),
+    AUTHORITY_VIEWER_TOKEN: ref('AUTHORITY_VIEWER_TOKEN'),
   }
 }
 
@@ -84,8 +94,8 @@ export function buildRuntimeInventory(project: RuntimeContractProject, environme
   ]
   const secrets: RuntimeVariable[] = secretNames.map((name) => ({ name, kind: 'runtime_private', required: name === 'DATABASE_URL' || name === 'SUPABASE_SERVICE_ROLE_KEY', source: 'secret_manager', reference_path: `${namespace}/${name}`, consumer: 'server', validation: 'present in provider and readable by runtime only' }))
   const optional: RuntimeVariable[] = [
-    { name: 'PORT', kind: 'optional', required: false, source: 'operator_input', consumer: 'server', validation: 'integer 1..65535; default provider port' },
-    { name: 'HOST', kind: 'optional', required: false, source: 'operator_input', consumer: 'server', validation: 'valid bind host; default provider host' },
+    { name: 'PORT', kind: 'optional', required: false, source: 'derived', value: '3400', consumer: 'server', validation: 'integer 1..65535' },
+    { name: 'HOST', kind: 'optional', required: false, source: 'derived', value: '0.0.0.0', consumer: 'server', validation: 'valid bind host' },
   ]
   return [...derived, ...secrets, ...optional]
 }

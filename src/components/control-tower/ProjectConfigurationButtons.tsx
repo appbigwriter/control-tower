@@ -11,7 +11,7 @@ type Props = {
 const buttons: Array<{ type: ArtifactType; label: string; pending: string; className: string }> = [
   {
     type: 'public_variables',
-    label: 'Gerar Variáveis Públicas',
+    label: 'Gerar Variáveis do Runtime',
     pending: 'Gerando variáveis...',
     className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/15',
   },
@@ -32,7 +32,7 @@ const buttons: Array<{ type: ArtifactType; label: string; pending: string; class
 function downloadArtifact(filename: string, value: unknown) {
   const content = typeof value === 'string'
     ? value
-    : Object.entries(value as Record<string, string>).map(([key, entry]) => `${key}=${entry}`).join('\\n')
+    : Object.entries(value as Record<string, string>).map(([key, entry]) => `${key}=${entry}`).join('\n')
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

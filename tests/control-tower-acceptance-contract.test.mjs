@@ -56,10 +56,12 @@ test('migrations define schema/artifact/secret idempotency primitives', async ()
   assert.match(artifactsMigration, /create table if not exists/)
 })
 
-test('public artifact builder never emits secret values', async () => {
+test('runtime artifact builder emits references and no secret values', async () => {
   const builder = await text('src/lib/control-tower/project-configuration.ts')
-  assert.match(builder, /SUPABASE_ANON_KEY: ''/)
-  assert.match(builder, /SUPABASE_SERVICE_ROLE_KEY: ''/)
+  assert.match(builder, /DATABASE_URL: ref\('DATABASE_URL'\)/)
+  assert.match(builder, /SUPABASE_SERVICE_ROLE_KEY: ref\('SUPABASE_SERVICE_ROLE_KEY'\)/)
+  assert.match(builder, /AUTHORITY_PROJECT_ID/)
+  assert.match(builder, /secret-manager:/)
   assert.match(builder, /\/health/)
 })
 

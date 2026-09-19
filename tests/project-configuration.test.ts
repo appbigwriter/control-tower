@@ -17,12 +17,15 @@ const project = {
   domain: 'example.com',
 }
 
-test('gera variáveis públicas com contexto do projeto e secrets vazios', () => {
+test('gera variáveis de runtime completas com referências seguras', () => {
   const variables = buildPublicVariables(project)
-  assert.equal(variables.NODE_ENV, 'production')
+  assert.equal(variables.NODE_ENV, 'development')
   assert.equal(variables.CONTROL_TOWER_PROJECT_ID, project.id)
   assert.equal(variables.CONTROL_TOWER_SCHEMA_NAME, project.schema_name)
-  assert.equal(variables.SUPABASE_SERVICE_ROLE_KEY, '')
+  assert.match(variables.DATABASE_URL, /^<secret-manager:/)
+  assert.match(variables.SUPABASE_SERVICE_ROLE_KEY, /^<secret-manager:/)
+  assert.equal(variables.AUTHORITY_PROJECT_ID, project.id)
+  assert.match(variables.AUTHORITY_OWNER_ID, /^<secret-manager:/)
 })
 
 test('gera namespace com plural para blog e id do projeto', () => {
@@ -48,6 +51,7 @@ test('runtime contract gera inventário completo por ambiente sem valores secret
   const inventory = buildRuntimeInventory(contractProject, 'development')
   assert.ok(inventory.some((item) => item.name === 'DATABASE_URL' && item.required && item.reference_path?.startsWith('secret-manager:')))
   assert.ok(inventory.some((item) => item.name === 'CONTROL_TOWER_SCHEMA_NAME' && item.value === project.schema_name))
+  assert.ok(inventory.every((item) => item.value !== undefined || item.reference_path !== undefined))
   assert.ok(inventory.every((item) => !('secret_value' in item)))
 })
 
