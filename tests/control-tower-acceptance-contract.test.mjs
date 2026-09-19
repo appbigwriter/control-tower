@@ -16,6 +16,7 @@ const fixture = JSON.parse(await text('tests/fixtures/control-tower-acceptance-c
 test('existing Control Tower routes match the acceptance contract', async () => {
   const projectRoute = await text('src/app/api/control-tower/projects/route.ts')
   const configurationRoute = await text('src/app/api/control-tower/projects/[slug]/configuration/route.ts')
+  const configurationUi = await text('src/components/control-tower/ProjectConfigurationButtons.tsx')
   const healthRoute = await text('src/app/api/control-tower/health/route.ts')
   const namespacesRoute = await text('src/app/api/control-tower/secrets/namespaces/route.ts')
   const bindingsRoute = await text('src/app/api/control-tower/secrets/bindings/route.ts')
@@ -28,6 +29,8 @@ test('existing Control Tower routes match the acceptance contract', async () => 
   assert.match(projectRoute, /createProjectHandler/)
   assert.match(configurationRoute, /project_configuration_artifacts/)
   assert.match(configurationRoute, /onConflict: 'project_id,artifact_type'/)
+  assert.match(configurationRoute, /isAdminSessionActive/)
+  assert.match(configurationUi, /\/api\/control-tower\/projects\/\$\{slug\}\/configuration/)
   assert.match(healthRoute, /status: 'healthy'/)
   assert.match(namespacesRoute, /onConflict: 'namespace'/)
   assert.match(bindingsSurface, /onConflict: 'namespace_id,secret_name,environment'/)

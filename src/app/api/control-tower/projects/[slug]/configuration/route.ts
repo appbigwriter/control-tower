@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
-import { authenticateToken, hasRequiredScope } from '@/lib/auth/control-tower'
+import { authenticateToken, hasRequiredScope, isAdminSessionActive, type AuthenticatedPrincipal } from '@/lib/auth/control-tower'
 import { buildArtifact, type ArtifactType } from '@/lib/control-tower/project-configuration'
 
 export const dynamic = 'force-dynamic'
@@ -8,7 +8,10 @@ export const dynamic = 'force-dynamic'
 const artifactTypes: ArtifactType[] = ['public_variables', 'namespace', 'validation_domain']
 
 async function authorize(req: NextRequest, scope: string) {
-  const principal = await authenticateToken(req.headers.get('authorization'))
+  if (await isAdminSessionActive()) {
+    return { type: 'admin', name: 'control-tower-session', scopes: ['*'] } satisfies AuthenticatedPrincipal
+  }
+  const principal = await authenticateToken(req.headers.get('authorization') ?? req.headers.get('x-api-key'))
   if (!principal) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   if (!hasRequiredScope(principal, scope)) return NextResponse.json({ error: `Scope ${scope} required` }, { status: 403 })
   return principal
