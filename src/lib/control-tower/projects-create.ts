@@ -23,7 +23,7 @@ export type CreateProjectInput = {
   slug: string
   business_type: string
   template_key: string
-  domain?: string | null
+  domain: string
   language: string
   organization_slug: string
 }
@@ -42,8 +42,8 @@ export function parseCreateProjectBody(body: unknown): { ok: true; input: Create
   if (typeof raw.template_key !== 'string') {
     return { ok: false, error: 'Payload invalido: template_key e obrigatorio' }
   }
-  if (raw.domain !== undefined && raw.domain !== null && typeof raw.domain !== 'string') {
-    return { ok: false, error: 'Payload invalido: domain deve ser string ou null' }
+  if (typeof raw.domain !== 'string' || raw.domain.trim().length === 0) {
+    return { ok: false, error: 'Payload invalido: domain e obrigatorio' }
   }
 
   const language = raw.language === undefined ? 'pt' : raw.language
@@ -63,7 +63,7 @@ export function parseCreateProjectBody(body: unknown): { ok: true; input: Create
       slug: raw.slug,
       business_type: String(raw.business_type ?? ''),
       template_key: raw.template_key,
-      domain: typeof raw.domain === 'string' && raw.domain.trim() === '' ? null : (raw.domain as string | null),
+      domain: raw.domain.trim(),
       language,
       organization_slug: organizationSlug,
     },

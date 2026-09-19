@@ -98,6 +98,7 @@ export function ProjectProvisionForm() {
           className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
           value={businessType}
           onChange={(event) => handleBusinessTypeChange(event.target.value as BusinessType)}
+          required
         >
           <option value="blog">Blog</option>
           <option value="store">Store</option>
@@ -114,6 +115,7 @@ export function ProjectProvisionForm() {
           className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
           value={templateKey}
           onChange={(event) => setTemplateKey(event.target.value as TemplateKey)}
+          required
         >
           <option value="blog_standard">blog_standard</option>
           <option value="store_standard">store_standard</option>
