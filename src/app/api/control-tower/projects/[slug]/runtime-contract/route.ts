@@ -26,7 +26,15 @@ async function loadProject(slug: string): Promise<RuntimeContractProject | null>
     .eq('slug', slug)
     .maybeSingle()
   if (error || !data) return null
-  return data as RuntimeContractProject
+  const { data: namespace } = await supabase
+    .from('secret_namespaces')
+    .select('namespace')
+    .eq('project_id', data.id)
+    .eq('status', 'active')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return { ...data, secret_namespace: namespace?.namespace ?? undefined } as RuntimeContractProject
 }
 
 export async function POST(

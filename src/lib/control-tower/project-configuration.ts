@@ -3,6 +3,7 @@ export type ProjectConfigurationProject = {
   business_type: 'blog' | 'store' | 'saas' | 'custom'
   schema_name: string
   domain: string | null
+  secret_namespace?: string
 }
 
 export type ArtifactType = 'public_variables' | 'namespace' | 'validation_domain'
@@ -32,6 +33,7 @@ export function buildPublicVariables(project: ProjectConfigurationProject) {
 }
 
 export function buildNamespace(project: ProjectConfigurationProject) {
+  if (project.secret_namespace?.trim()) return project.secret_namespace.trim().replace(/\/+$/, '')
   const segment = project.business_type === 'blog' ? 'blogs' : project.business_type
   return `fbr/${segment}/${project.id}`
 }
@@ -83,16 +85,17 @@ const secretNames = [
 ] as const
 
 export function buildRuntimeInventory(project: RuntimeContractProject, environment: RuntimeEnvironment): RuntimeVariable[] {
-  const namespace = `secret-manager:fbr/${project.business_type === 'blog' ? 'blogs' : project.business_type}/${project.id}/${environment}`
+  const namespace = buildNamespace(project)
+  const secretNamespace = namespace.startsWith('secret-manager:') ? namespace : `secret-manager:${namespace}`
   const derived: RuntimeVariable[] = [
     { name: 'NODE_ENV', kind: 'public', required: true, source: 'derived', value: environment === 'production' ? 'production' : environment, consumer: 'server', validation: 'one of development|staging|production' },
     { name: 'APP_ENV', kind: 'public', required: true, source: 'derived', value: environment, consumer: 'server', validation: 'matches environment' },
     { name: 'CONTROL_TOWER_PROJECT_ID', kind: 'public', required: true, source: 'derived', value: project.id, consumer: 'server', validation: 'equals catalog project_id' },
     { name: 'CONTROL_TOWER_SCHEMA_NAME', kind: 'public', required: true, source: 'derived', value: project.schema_name, consumer: 'server', validation: 'equals catalog schema_name' },
     { name: 'CONTROL_TOWER_BASE_URL', kind: 'public', required: true, source: 'derived', value: 'https://control-tower.fbr.news', consumer: 'server', validation: 'valid https URL' },
-    { name: 'SUPABASE_URL', kind: 'runtime_private', required: true, source: 'provider', reference_path: `${namespace}/SUPABASE_URL`, consumer: 'server', validation: 'valid https URL' },
+    { name: 'SUPABASE_URL', kind: 'runtime_private', required: true, source: 'provider', reference_path: `${secretNamespace}/SUPABASE_URL`, consumer: 'server', validation: 'valid https URL' },
   ]
-  const secrets: RuntimeVariable[] = secretNames.map((name) => ({ name, kind: 'runtime_private', required: name === 'DATABASE_URL' || name === 'SUPABASE_SERVICE_ROLE_KEY', source: 'secret_manager', reference_path: `${namespace}/${name}`, consumer: 'server', validation: 'present in provider and readable by runtime only' }))
+  const secrets: RuntimeVariable[] = secretNames.map((name) => ({ name, kind: 'runtime_private', required: name === 'DATABASE_URL' || name === 'SUPABASE_SERVICE_ROLE_KEY', source: 'secret_manager', reference_path: `${secretNamespace}/${name}`, consumer: 'server', validation: 'present in provider and readable by runtime only' }))
   const optional: RuntimeVariable[] = [
     { name: 'PORT', kind: 'optional', required: false, source: 'derived', value: '3400', consumer: 'server', validation: 'integer 1..65535' },
     { name: 'HOST', kind: 'optional', required: false, source: 'derived', value: '0.0.0.0', consumer: 'server', validation: 'valid bind host' },
@@ -106,7 +109,7 @@ export function buildRuntimeContract(project: RuntimeContractProject, environmen
     contractVersion: '1.0.0',
     project: { id: project.id, name: project.name, slug: project.slug, businessType: project.business_type, templateKey: project.template_key, templateVersion: project.template_version, schemaName: project.schema_name, domain: project.domain, language: project.language, status: project.status },
     environment,
-    namespace: `fbr/${project.business_type === 'blog' ? 'blogs' : project.business_type}/${project.id}/${environment}`,
+    namespace: buildNamespace(project),
     serviceName: project.slug,
     inventory,
     states: ['generated', 'registered', 'delivered', 'verified'] as const,

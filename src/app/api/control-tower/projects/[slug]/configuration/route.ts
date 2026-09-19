@@ -42,7 +42,16 @@ export async function POST(
       return NextResponse.json({ error: 'Projeto não encontrado.' }, { status: 404 })
     }
 
-    const artifact = buildArtifact(project, type)
+    const { data: namespace } = await supabase
+      .from('secret_namespaces')
+      .select('namespace')
+      .eq('project_id', project.id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    const artifact = buildArtifact({ ...project, secret_namespace: namespace?.namespace ?? undefined }, type)
     const { data: saved, error: saveError } = await supabase
       .from('project_configuration_artifacts')
       .upsert({
