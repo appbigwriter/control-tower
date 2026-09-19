@@ -6,7 +6,7 @@
   "description": "Control Tower para catalogo, provisionamento e governanca de projetos em Supabase.",
   "scripts": {
     "dev": "next dev",
-    "test": "node --experimental-strip-types --test tests/project-configuration.test.ts tests/easypanel-adapter.test.ts tests/easypanel-homologation.test.mjs tests/gdb-rem-011-013-regression.test.ts tests/gdb-rem-015-e2e-local.test.ts",
+    "test": "node --experimental-strip-types --test tests/project-configuration.test.ts tests/control-tower-acceptance-contract.test.mjs tests/easypanel-adapter.test.ts tests/easypanel-homologation.test.mjs tests/gdb-rem-011-013-regression.test.ts tests/gdb-rem-015-e2e-local.test.ts",
     "contract:fixture": "node --experimental-strip-types scripts/easypanel-contract-fixture.mjs",
     "easypanel:homologation": "node scripts/easypanel-homologation.mjs",
     "build": "next build",

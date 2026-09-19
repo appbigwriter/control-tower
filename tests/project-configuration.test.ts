@@ -5,6 +5,9 @@ import {
   buildNamespace,
   buildPublicVariables,
   buildValidationDomain,
+  renderRuntimeDeveloperDocument,
+  buildRuntimeContract,
+  buildRuntimeInventory,
 } from '../src/lib/control-tower/project-configuration.ts'
 
 const project = {
@@ -38,4 +41,22 @@ test('monta artefatos baixáveis para os três tipos', () => {
   assert.equal(buildArtifact(project, 'namespace').filename, `${project.id}-namespace.txt`)
   assert.equal(buildArtifact(project, 'validation_domain').value, 'https://example.com/health')
   assert.equal(buildArtifact(project, 'public_variables').filename, `${project.id}.env`)
+})
+
+test('runtime contract gera inventário completo por ambiente sem valores secretos', () => {
+  const contractProject = { ...project, name: 'Authority Engine', slug: 'authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }
+  const inventory = buildRuntimeInventory(contractProject, 'development')
+  assert.ok(inventory.some((item) => item.name === 'DATABASE_URL' && item.required && item.reference_path?.startsWith('secret-manager:')))
+  assert.ok(inventory.some((item) => item.name === 'CONTROL_TOWER_SCHEMA_NAME' && item.value === project.schema_name))
+  assert.ok(inventory.every((item) => !('secret_value' in item)))
+})
+
+test('runtime contract e Developer Document são sanitizados e versionados', () => {
+  const contract = buildRuntimeContract({ ...project, name: 'Authority Engine', slug: 'authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }, 'production')
+  const document = renderRuntimeDeveloperDocument(contract)
+  assert.equal(contract.contractVersion, '1.0.0')
+  assert.equal(contract.environment, 'production')
+  assert.match(document, /DATABASE_URL/)
+  assert.match(document, /secret-manager:/)
+  assert.doesNotMatch(document, /secret_value|service-role-value|local-e2e-admin/)
 })

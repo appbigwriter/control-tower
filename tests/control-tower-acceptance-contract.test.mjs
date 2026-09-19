@@ -19,17 +19,24 @@ test('existing Control Tower routes match the acceptance contract', async () => 
   const healthRoute = await text('src/app/api/control-tower/health/route.ts')
   const namespacesRoute = await text('src/app/api/control-tower/secrets/namespaces/route.ts')
   const bindingsRoute = await text('src/app/api/control-tower/secrets/bindings/route.ts')
+  const runtimeRoute = await text('src/app/api/control-tower/projects/[slug]/runtime-contract/route.ts')
+  const runtimeMigration = await text('supabase/migrations/013_project_runtime_contracts.sql')
   // GDB-REM-012: lifecycle moved to lib; contract assertions cover route + lib.
   const bindingsLib = await text('src/lib/control-tower/bindings.ts')
   const bindingsSurface = bindingsRoute + '\n' + bindingsLib
 
-  assert.match(projectRoute, /provision_project/)
+  assert.match(projectRoute, /createProjectHandler/)
   assert.match(configurationRoute, /project_configuration_artifacts/)
   assert.match(configurationRoute, /onConflict: 'project_id,artifact_type'/)
   assert.match(healthRoute, /status: 'healthy'/)
   assert.match(namespacesRoute, /onConflict: 'namespace'/)
   assert.match(bindingsSurface, /onConflict: 'namespace_id,secret_name,environment'/)
   assert.match(bindingsSurface, /reference_path/)
+  assert.match(runtimeRoute, /project_runtime_contracts/)
+  assert.match(runtimeRoute, /buildRuntimeContract/)
+  assert.match(runtimeMigration, /unique\(project_id, environment, contract_version\)/)
+  assert.match(runtimeMigration, /document_markdown/)
+  assert.doesNotMatch(runtimeRoute, /secret_value/)
   assert.doesNotMatch(bindingsSurface, /select\([^)]*secret_value/)
 })
 

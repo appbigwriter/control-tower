@@ -194,11 +194,33 @@ export async function GET(
     return NextResponse.json({ error: 'Projeto não encontrado' }, { status: 404 })
   }
 
+  const { data: runtimeContract, error: runtimeContractError } = await supabase
+    .from('project_runtime_contracts')
+    .select('document_markdown, environment, contract_version, status, updated_at')
+    .eq('project_id', data.id)
+    .eq('environment', 'development')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (runtimeContractError) {
+    return NextResponse.json({ error: 'Runtime contract indisponível; migration 013/readback são obrigatórios.' }, { status: 503 })
+  }
+  if (runtimeContract) {
+    return new NextResponse(runtimeContract.document_markdown, {
+      headers: {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${slug}-dev-doc.md"`,
+        'X-Runtime-Contract-Version': runtimeContract.contract_version,
+        'X-Runtime-Contract-Status': runtimeContract.status,
+      },
+    })
+  }
+
+  return NextResponse.json({ error: 'Runtime contract ainda não foi gerado; execute POST /runtime-contract antes do Developer Document.' }, { status: 409 })
+
+  /* Legacy document generation remains below for reference during migration. */
+  /* istanbul ignore next */
   const markdown = buildDoc(data as ProjectRow)
-  return new NextResponse(markdown, {
-    headers: {
-      'Content-Type': 'text/markdown; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${slug}-dev-doc.md"`,
-    },
-  })
+
 }
