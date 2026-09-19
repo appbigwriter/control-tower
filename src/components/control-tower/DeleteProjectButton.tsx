@@ -19,6 +19,8 @@ export function DeleteProjectButton({
     try {
       const response = await fetch(`/api/control-tower/projects/${slug}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true, slug }),
       })
 
       if (!response.ok) {
