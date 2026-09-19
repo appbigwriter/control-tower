@@ -130,6 +130,7 @@ export function renderRuntimeDeveloperDocument(contract: ReturnType<typeof build
     `- Slug: ${contract.project.slug}`,
     `- Environment: ${contract.environment}`,
     `- Schema: ${contract.project.schemaName}`,
+    `- Domain: ${contract.project.domain ?? 'not configured'}`,
     `- Service: ${contract.serviceName}`,
     `- Secret namespace: ${contract.namespace}`,
     `- Status: ${contract.status}`,

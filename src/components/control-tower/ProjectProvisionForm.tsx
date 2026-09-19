@@ -49,7 +49,7 @@ export function ProjectProvisionForm() {
           slug,
           business_type: businessType,
           template_key: templateKey,
-          domain: domain || null,
+          domain,
           language,
         }),
       })
