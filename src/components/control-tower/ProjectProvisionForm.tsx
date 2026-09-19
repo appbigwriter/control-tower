@@ -131,6 +131,7 @@ export function ProjectProvisionForm() {
           placeholder="exemplo.com"
           value={domain}
           onChange={(event) => setDomain(event.target.value)}
+          required
         />
       </label>
 
@@ -140,6 +141,7 @@ export function ProjectProvisionForm() {
           className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
           value={language}
           onChange={(event) => setLanguage(event.target.value as 'pt' | 'en' | 'es')}
+          required
         >
           <option value="pt">pt</option>
           <option value="en">en</option>
