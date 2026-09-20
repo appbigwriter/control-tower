@@ -5,6 +5,7 @@ import { DeveloperDocButton } from '@/components/control-tower/DeveloperDocButto
 import { FrontendAdsenseHandoffButton } from '@/components/control-tower/FrontendAdsenseHandoffButton'
 import { ProjectProvisionForm } from '@/components/control-tower/ProjectProvisionForm'
 import { DeleteProjectButton } from '@/components/control-tower/DeleteProjectButton'
+import { EditProjectButton } from '@/components/control-tower/EditProjectButton'
 import { ProjectConfigurationButtons } from '@/components/control-tower/ProjectConfigurationButtons'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 
@@ -18,6 +19,10 @@ type ProjectRow = {
   template_key: string
   schema_name: string
   domain: string | null
+  repository_url: string | null
+  hosting_target: 'vps1' | 'vps2' | null
+  hosting_project_name: string | null
+  service_name: string | null
   status: 'pending' | 'active' | 'archived' | 'error'
   template_version: string
   created_at: string
@@ -96,7 +101,7 @@ export default async function ControlTowerPage() {
       supabase
         .from('projects')
         .select(
-          'id, name, slug, business_type, template_key, schema_name, domain, status, template_version, created_at',
+          'id, name, slug, business_type, template_key, schema_name, domain, repository_url, hosting_target, hosting_project_name, service_name, status, template_version, created_at',
         )
         .order('created_at', { ascending: true }),
       supabase
@@ -335,6 +340,8 @@ export default async function ControlTowerPage() {
                 ) : (
                   <p>Sem domínio vinculado.</p>
                 )}
+                <p className="mt-1">Target: {project.hosting_target ? `${project.hosting_target} / ${project.hosting_project_name ?? 'sem projeto'}` : 'não configurado'}</p>
+                <p className="mt-1 truncate">Service: {project.service_name ?? 'não configurado'}</p>
               </div>
 
               <div className="mt-4 border-t border-white/10 pt-4">
@@ -346,7 +353,16 @@ export default async function ControlTowerPage() {
                     >
                       Ver detalhes
                     </Link>
-                    <DeleteProjectButton slug={project.slug} projectName={project.name} />
+                    <div className="flex items-center gap-2">
+                      <EditProjectButton
+                        slug={project.slug}
+                        name={project.name}
+                        domain={project.domain}
+                        repositoryUrl={project.repository_url}
+                        hostingTarget={project.hosting_target}
+                      />
+                      <DeleteProjectButton slug={project.slug} projectName={project.name} />
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <DeveloperDocButton slug={project.slug} />
