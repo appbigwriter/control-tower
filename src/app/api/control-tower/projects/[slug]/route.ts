@@ -48,10 +48,13 @@ export async function DELETE(
     }
 
     const result = await deleteProject(client, project, actor)
+    const failureMessage = result.ok
+      ? result.message
+      : `${result.message}${result.sagaReceipt.error ? ` Detalhe: ${result.sagaReceipt.error}` : ''}`
     return NextResponse.json(
       result.ok
         ? { message: result.message, receipt: result.sagaReceipt, readback: result.readback }
-        : { error: result.message, receipt: result.sagaReceipt, readback: result.readback, blocked: result.blocked },
+        : { error: failureMessage, receipt: result.sagaReceipt, readback: result.readback, blocked: result.blocked },
       { status: result.httpStatus },
     )
   } catch (error) {
