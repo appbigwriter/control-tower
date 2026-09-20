@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, hasRequiredScope, isAdminSessionActive, type AuthenticatedPrincipal } from '@/lib/auth/control-tower'
@@ -26,7 +27,7 @@ async function loadProject(slug: string): Promise<RuntimeContractProject | null>
   const supabase = createServiceRoleClient()
   const { data, error } = await supabase
     .from('projects')
-    .select('id, name, slug, business_type, schema_name, domain, template_key, template_version, language, status, hosting_target, hosting_project_name, service_name')
+    .select('id, name, slug, business_type, schema_name, domain, template_key, template_version, language, status, hosting_target, hosting_project_name, service_name, authority_owner_id')
     .eq('slug', slug)
     .maybeSingle()
   if (error || !data) return null
@@ -39,6 +40,21 @@ async function loadProject(slug: string): Promise<RuntimeContractProject | null>
     .limit(1)
     .maybeSingle()
   return { ...data, secret_namespace: namespace?.namespace ?? undefined } as RuntimeContractProject
+}
+
+async function ensureAuthorityOwnerId(project: RuntimeContractProject): Promise<RuntimeContractProject> {
+  if (project.slug !== 'authorityengine' || project.authority_owner_id) return project
+  const supabase = createServiceRoleClient()
+  const generated = randomUUID()
+  const { error } = await supabase
+    .from('projects')
+    .update({ authority_owner_id: generated, updated_at: new Date().toISOString() })
+    .eq('id', project.id)
+    .is('authority_owner_id', null)
+  if (error) throw new Error(`authority_owner_id_persist_failed:${error.message}`)
+  const refreshed = await loadProject(project.slug)
+  if (!refreshed?.authority_owner_id) throw new Error('authority_owner_id_readback_missing')
+  return refreshed
 }
 
 const SUPABASE_RUNTIME_PROJECT = 'supabase'
@@ -97,10 +113,19 @@ async function resolveRuntimeEnvironment(
   }
   const resolved: Record<string, string> = {}
   for (const variable of contract.inventory) {
-    const candidates = [variable.name, ...(aliases[variable.name] ?? [])]
-    const value = variable.value ?? candidates.map((name) => sourceEnv[name] || process.env[name]).find(Boolean)
+    const candidates = variable.source === 'provider'
+      ? [variable.name, ...(aliases[variable.name] ?? [])]
+      : [variable.name]
+    const value = variable.value ?? (variable.source === 'provider'
+      ? candidates.map((name) => sourceEnv[name] || process.env[name]).find(Boolean)
+      : process.env[variable.name])
     if (value === undefined || value === '') {
-      if (variable.required) throw new Error(`runtime_variable_missing:${variable.name}:source=${SUPABASE_RUNTIME_PROJECT}/${source.serviceName}`)
+      if (variable.required) {
+        const diagnosticSource = variable.source === 'provider'
+          ? `provider=${SUPABASE_RUNTIME_PROJECT}/${source.serviceName}`
+          : `secret_manager=${variable.reference_path ?? variable.name}`
+        throw new Error(`runtime_variable_missing:${variable.name}:source=${diagnosticSource}`)
+      }
       continue
     }
     resolved[variable.name] = value
@@ -155,8 +180,9 @@ export async function POST(
     const body = await req.json().catch(() => ({})) as { environment?: RuntimeEnvironment; inject?: boolean }
     const environment = body.environment ?? 'development'
     if (!environments.includes(environment)) return NextResponse.json({ error: 'Environment must be development, staging or production.' }, { status: 400 })
-    const project = await loadProject(slug)
-    if (!project) return NextResponse.json({ error: 'Projeto não encontrado.' }, { status: 404 })
+    const loadedProject = await loadProject(slug)
+    if (!loadedProject) return NextResponse.json({ error: 'Projeto não encontrado.' }, { status: 404 })
+    const project = await ensureAuthorityOwnerId(loadedProject)
     const contract = buildRuntimeContract(project, environment)
     const document = renderRuntimeDeveloperDocument(contract)
     const supabase = createServiceRoleClient()

@@ -4,6 +4,7 @@ export type ProjectConfigurationProject = {
   schema_name: string
   domain: string | null
   secret_namespace?: string
+  authority_owner_id?: string | null
 }
 
 export type ArtifactType = 'public_variables' | 'namespace' | 'validation_domain'
@@ -20,7 +21,7 @@ export function buildPublicVariables(project: ProjectConfigurationProject) {
     CONTROL_TOWER_PROJECT_ID: project.id,
     CONTROL_TOWER_SCHEMA_NAME: project.schema_name,
     AUTHORITY_PROJECT_ID: project.id,
-    AUTHORITY_OWNER_ID: ref('AUTHORITY_OWNER_ID'),
+    AUTHORITY_OWNER_ID: project.authority_owner_id ?? ref('AUTHORITY_OWNER_ID'),
     SUPABASE_URL: ref('SUPABASE_URL'),
     DATABASE_URL: ref('DATABASE_URL'),
     SUPABASE_SERVICE_ROLE_KEY: ref('SUPABASE_SERVICE_ROLE_KEY'),
@@ -76,13 +77,13 @@ export type RuntimeContractProject = ProjectConfigurationProject & {
   hosting_target?: 'vps1' | 'vps2' | null
   hosting_project_name?: string | null
   service_name?: string | null
+  authority_owner_id?: string | null
 }
 
 const secretNames = [
   'DATABASE_URL',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
-  'AUTHORITY_OWNER_ID',
   'AUTHORITY_ADMIN_TOKEN',
   'AUTHORITY_OPERATOR_TOKEN',
   'AUTHORITY_REVIEWER_TOKEN',
@@ -119,7 +120,7 @@ export function buildRuntimeInventory(project: RuntimeContractProject, environme
     { name: 'CONTROL_TOWER_BASE_URL', kind: 'public', required: true, source: 'derived', value: 'https://control-tower.fbr.news', consumer: 'server', validation: 'valid https URL' },
     { name: 'CONTROL_TOWER_PROJECT_ID', kind: 'public', required: true, source: 'derived', value: project.id, consumer: 'server', validation: 'equals catalog project_id' },
     { name: 'CONTROL_TOWER_SCHEMA_NAME', kind: 'public', required: true, source: 'derived', value: project.schema_name, consumer: 'server', validation: 'equals catalog schema_name' },
-    ...(profile === 'authority' ? [{ name: 'AUTHORITY_PROJECT_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: project.id, consumer: 'server' as const, validation: 'equals catalog project_id' }] : []),
+    ...(profile === 'authority' ? [{ name: 'AUTHORITY_PROJECT_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: project.id, consumer: 'server' as const, validation: 'equals catalog project_id' }, { name: 'AUTHORITY_OWNER_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: project.authority_owner_id ?? undefined, consumer: 'server' as const, validation: 'stable UUID persisted in catalog' }] : []),
   ]
   const secrets: RuntimeVariable[] = secretNames.map((name) => ({
     name,
