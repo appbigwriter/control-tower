@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, hasRequiredScope, isAdminSessionActive, type AuthenticatedPrincipal } from '@/lib/auth/control-tower'
-import { EasypanelSecretsProvider, easypanelTargetEnv, parseServiceEnv, type EasypanelTarget } from '@/lib/secrets/adapter'
+import { EasypanelSecretsProvider, easypanelTargetEnv, parseServiceEnv, readbackHasService, type EasypanelTarget } from '@/lib/secrets/adapter'
 import {
   buildRuntimeContract,
   renderRuntimeDeveloperDocument,
@@ -52,7 +52,12 @@ async function resolveRuntimeEnvironment(
   provider: EasypanelSecretsProvider,
 ): Promise<Record<string, string>> {
   const source = SUPABASE_RUNTIME_SOURCE[target]
-  const sourceReadback = await provider.inspectAppService(source.projectName, source.serviceName)
+  let sourceReadback: unknown
+  try {
+    sourceReadback = await provider.inspectAppService(source.projectName, source.serviceName)
+  } catch (error) {
+    throw new Error(`runtime_secret_source_readback_failed:${source.projectName}/${source.serviceName}:${error instanceof Error ? error.message : 'inspect_failed'}`)
+  }
   const sourceEnv = parseServiceEnv(sourceReadback)
   const aliases: Record<string, string[]> = {
     SUPABASE_ANON_KEY: ['ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY'],
@@ -81,9 +86,26 @@ async function injectRuntimeEnvironment(
   const projectName = project.hosting_project_name?.trim() || process.env[envNames.projectName]?.trim()
   if (!projectName) throw new Error(`easypanel_project_name_missing:${target}`)
   const provider = new EasypanelSecretsProvider(target)
+  let services: unknown
+  try {
+    services = await provider.listProjectsAndServices()
+    if (!readbackHasService(services, projectName, contract.serviceName)) {
+      await provider.createAppService(projectName, contract.serviceName)
+      services = await provider.listProjectsAndServices()
+      if (!readbackHasService(services, projectName, contract.serviceName)) {
+        throw new Error(`runtime_target_service_readback_missing:${projectName}/${contract.serviceName}`)
+      }
+    }
+  } catch (error) {
+    throw new Error(`runtime_target_service_unavailable:${projectName}/${contract.serviceName}:${error instanceof Error ? error.message : 'service_check_failed'}`)
+  }
   const values = await resolveRuntimeEnvironment(contract, target, provider)
-  await provider.updateEnv(projectName, contract.serviceName, values)
-  await provider.deploy(projectName, contract.serviceName)
+  try {
+    await provider.updateEnv(projectName, contract.serviceName, values)
+    await provider.deploy(projectName, contract.serviceName)
+  } catch (error) {
+    throw new Error(`runtime_target_mutation_failed:${projectName}/${contract.serviceName}:${error instanceof Error ? error.message : 'mutation_failed'}`)
+  }
   const readback = await provider.inspectAppService(projectName, contract.serviceName)
   const status = typeof (readback as { status?: unknown })?.status === 'string' ? (readback as { status: string }).status : 'NOT_VERIFIED'
   if (status !== 'running' && status !== 'deploying') throw new Error(`runtime_deploy_readback_not_healthy:${status}`)
