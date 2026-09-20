@@ -94,6 +94,17 @@ export function runtimeProfileOf(project: Pick<RuntimeContractProject, 'slug' | 
   return project.schema_name === 'custom_authorityengine' || project.slug === 'authorityengine' ? 'authority' : 'generic'
 }
 
+export function assertRuntimeProjectIdentity(project: Pick<RuntimeContractProject, 'slug' | 'schema_name' | 'business_type'>): void {
+  const isAuthoritySlug = project.slug === 'authorityengine'
+  const isAuthoritySchema = project.schema_name === 'custom_authorityengine'
+  if (isAuthoritySlug && (!isAuthoritySchema || project.business_type !== 'custom')) {
+    throw new Error('authority_project_identity_mismatch:authorityengine_requires_custom_authorityengine_custom')
+  }
+  if (isAuthoritySchema && (!isAuthoritySlug || project.business_type !== 'custom')) {
+    throw new Error('authority_schema_identity_mismatch:custom_authorityengine_requires_authorityengine_custom')
+  }
+}
+
 export function runtimeEnvFilename(slug: string, environment: RuntimeEnvironment): string {
   return environment === 'production' ? `env.${slug}` : `env.${slug}.${environment}`
 }
@@ -138,6 +149,7 @@ export function buildServiceName(project: Pick<RuntimeContractProject, 'name'>):
 }
 
 export function buildRuntimeContract(project: RuntimeContractProject, environment: RuntimeEnvironment = 'development') {
+  assertRuntimeProjectIdentity(project)
   const inventory = buildRuntimeInventory(project, environment)
   const contract = {
     contractVersion: '1.0.0',

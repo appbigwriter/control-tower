@@ -10,6 +10,7 @@ import {
   buildRuntimeInventory,
   buildServiceName,
   runtimeEnvFilename,
+  assertRuntimeProjectIdentity,
 } from '../src/lib/control-tower/project-configuration.ts'
 
 const project = {
@@ -49,19 +50,19 @@ test('monta artefatos baixáveis para os três tipos', () => {
 })
 
 test('runtime contract gera inventário completo por ambiente sem valores secretos', () => {
-  const contractProject = { ...project, name: 'Authority Engine', slug: 'authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }
+  const contractProject = { ...project, business_type: 'custom' as const, schema_name: 'custom_authorityengine', name: 'Authority Engine', slug: 'authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }
   const inventory = buildRuntimeInventory(contractProject, 'development')
   assert.ok(inventory.some((item) => item.name === 'DATABASE_URL' && item.required && item.reference_path?.startsWith('secret-manager:')))
   assert.ok(inventory.some((item) => item.name === 'AUTHORITY_PROJECT_ID' && item.value === project.id && item.required))
   assert.ok(inventory.some((item) => item.name === 'AUTHORITY_OWNER_ID' && item.required && item.reference_path?.startsWith('secret-manager:')))
   assert.ok(inventory.some((item) => item.name === 'AUTHORITY_ADMIN_TOKEN' && item.required && item.reference_path?.startsWith('secret-manager:')))
-  assert.ok(inventory.some((item) => item.name === 'CONTROL_TOWER_SCHEMA_NAME' && item.value === project.schema_name))
+  assert.ok(inventory.some((item) => item.name === 'CONTROL_TOWER_SCHEMA_NAME' && item.value === 'custom_authorityengine'))
   assert.ok(inventory.every((item) => item.value !== undefined || item.reference_path !== undefined))
   assert.ok(inventory.every((item) => !('secret_value' in item)))
 })
 
 test('env document is explicit, complete and named by slug', () => {
-  const contractProject = { ...project, name: 'Authority Engine', slug: 'authorityengine', schema_name: 'custom_authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }
+  const contractProject = { ...project, business_type: 'custom' as const, name: 'Authority Engine', slug: 'authorityengine', schema_name: 'custom_authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }
   const contract = buildRuntimeContract(contractProject, 'production')
   assert.equal(runtimeEnvFilename('authorityengine', 'production'), 'env.authorityengine')
   assert.equal(contract.envFilename, 'env.authorityengine')
@@ -74,13 +75,19 @@ test('env document is explicit, complete and named by slug', () => {
   assert.ok(contract.envDocument.split('\n').filter(Boolean).length >= 15)
 })
 
+test('Authority falha fechado quando slug, schema ou business_type divergem', () => {
+  assert.doesNotThrow(() => assertRuntimeProjectIdentity({ slug: 'authorityengine', schema_name: 'custom_authorityengine', business_type: 'custom' }))
+  assert.throws(() => assertRuntimeProjectIdentity({ slug: 'authorityengine', schema_name: 'custom_fbr_blogs', business_type: 'custom' }), /authority_project_identity_mismatch/)
+  assert.throws(() => assertRuntimeProjectIdentity({ slug: 'fbr_blogs', schema_name: 'custom_authorityengine', business_type: 'blog' }), /authority_schema_identity_mismatch/)
+})
+
 test('serviceName deriva do primeiro nome do projeto', () => {
   assert.equal(buildServiceName({ name: 'Authority Engine' }), 'authority')
   assert.equal(buildServiceName({ name: 'FBR Ads' }), 'fbr')
 })
 
 test('runtime contract e Developer Document são sanitizados e versionados', () => {
-  const contract = buildRuntimeContract({ ...project, name: 'Authority Engine', slug: 'authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }, 'production')
+  const contract = buildRuntimeContract({ ...project, business_type: 'custom' as const, schema_name: 'custom_authorityengine', name: 'Authority Engine', slug: 'authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }, 'production')
   const document = renderRuntimeDeveloperDocument(contract)
   assert.equal(contract.contractVersion, '1.0.0')
   assert.equal(contract.environment, 'production')
