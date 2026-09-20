@@ -44,35 +44,43 @@ async function loadProject(slug: string): Promise<RuntimeContractProject | null>
 const SUPABASE_RUNTIME_PROJECT = 'supabase'
 const SUPABASE_SERVICE_CANDIDATES = ['supabase-gestaodb', 'base', 'db', 'postgres', 'supabase-db'] as const
 
-function serviceNamesInProject(readback: unknown, projectName: string): string[] {
-  if (Array.isArray(readback)) return readback.flatMap((item) => serviceNamesInProject(item, projectName))
+type ServiceRef = { projectName: string; serviceName: string }
+
+function serviceRefsInCatalog(readback: unknown): ServiceRef[] {
+  if (Array.isArray(readback)) return readback.flatMap(serviceRefsInCatalog)
   if (!readback || typeof readback !== 'object') return []
   const record = readback as Record<string, unknown>
-  const name = typeof record.name === 'string' ? record.name : typeof record.projectName === 'string' ? record.projectName : undefined
+  const projectName = typeof record.name === 'string' ? record.name : typeof record.projectName === 'string' ? record.projectName : undefined
   const services = Array.isArray(record.services) ? record.services : []
-  const own = name === projectName ? services.flatMap((service) => {
+  const own = projectName ? services.flatMap((service) => {
     if (!service || typeof service !== 'object') return []
     const serviceRecord = service as Record<string, unknown>
     const serviceName = serviceRecord.name ?? serviceRecord.serviceName
-    return typeof serviceName === 'string' ? [serviceName] : []
+    return typeof serviceName === 'string' ? [{ projectName, serviceName }] : []
   }) : []
-  return [...own, ...Object.values(record).flatMap((value) => serviceNamesInProject(value, projectName))]
+  return [...own, ...Object.values(record).flatMap((value) => serviceRefsInCatalog(value))]
 }
 
-async function readSupabaseRuntimeEnv(provider: EasypanelSecretsProvider): Promise<{ serviceName: string; env: Record<string, string> }> {
+async function readSupabaseRuntimeEnv(provider: EasypanelSecretsProvider): Promise<{ projectName: string; serviceName: string; env: Record<string, string> }> {
   const catalog = await provider.listProjectsAndServices()
-  const discovered = serviceNamesInProject(catalog, SUPABASE_RUNTIME_PROJECT)
-  const candidates = [...new Set([...SUPABASE_SERVICE_CANDIDATES, ...discovered])]
-  for (const serviceName of candidates) {
+  const discovered = serviceRefsInCatalog(catalog)
+  const preferred = discovered.filter(({ projectName, serviceName }) =>
+    projectName === SUPABASE_RUNTIME_PROJECT || /supabase|gestaodb|database|postgres|^db$|^base$/i.test(`${projectName}/${serviceName}`),
+  )
+  const defaults = SUPABASE_SERVICE_CANDIDATES.flatMap((serviceName) => [
+    { projectName: SUPABASE_RUNTIME_PROJECT, serviceName },
+  ])
+  const candidates = [...new Map([...preferred, ...defaults].map((item) => [`${item.projectName}/${item.serviceName}`, item])).values()]
+  for (const candidate of candidates) {
     try {
-      const readback = await provider.inspectAppService(SUPABASE_RUNTIME_PROJECT, serviceName)
+      const readback = await provider.inspectAppService(candidate.projectName, candidate.serviceName)
       const env = parseServiceEnv(readback)
-      if (env.DATABASE_URL || env.POSTGRES_HOST || env.SUPABASE_URL) return { serviceName, env }
+      if (env.DATABASE_URL || env.POSTGRES_HOST || env.SUPABASE_URL) return { ...candidate, env }
     } catch {
-      // Candidate does not exist or is not inspectable; continue discovery without exposing the error/value.
+      // Candidate does not exist or is not inspectable; continue without exposing values.
     }
   }
-  throw new Error(`runtime_secret_source_service_not_found:${SUPABASE_RUNTIME_PROJECT}:candidates=${candidates.join(',')}`)
+  throw new Error(`runtime_secret_source_service_not_found:candidates=${candidates.map((item) => `${item.projectName}/${item.serviceName}`).join(',')}`)
 }
 
 async function resolveRuntimeEnvironment(
