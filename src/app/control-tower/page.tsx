@@ -369,7 +369,7 @@ export default async function ControlTowerPage() {
                     <BigWriterHandoffButton slug={project.slug} />
                     <FrontendAdsenseHandoffButton slug={project.slug} />
                   </div>
-                  <ProjectConfigurationButtons slug={project.slug} />
+                  <ProjectConfigurationButtons slug={project.slug} domain={project.domain} />
                 </div>
               </div>
             </article>
