@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, hasRequiredScope, isAdminSessionActive, type AuthenticatedPrincipal } from '@/lib/auth/control-tower'
@@ -104,21 +104,31 @@ async function resolveRuntimeEnvironment(
   contract: ReturnType<typeof buildRuntimeContract>,
   target: EasypanelTarget,
   provider: EasypanelSecretsProvider,
+  destination: { projectName: string; serviceName: string },
 ): Promise<Record<string, string>> {
   const source = await readSupabaseRuntimeEnv(provider)
   const sourceEnv = source.env
+  const destinationReadback = await provider.inspectAppService(destination.projectName, destination.serviceName)
+  const destinationEnv = parseServiceEnv(destinationReadback)
   const aliases: Record<string, string[]> = {
     SUPABASE_ANON_KEY: ['ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY'],
     SUPABASE_SERVICE_ROLE_KEY: ['SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY'],
   }
   const resolved: Record<string, string> = {}
+  const authorityTokenNames = new Set([
+    'AUTHORITY_ADMIN_TOKEN',
+    'AUTHORITY_OPERATOR_TOKEN',
+    'AUTHORITY_REVIEWER_TOKEN',
+    'AUTHORITY_PUBLISHER_TOKEN',
+    'AUTHORITY_VIEWER_TOKEN',
+  ])
   for (const variable of contract.inventory) {
     const candidates = variable.source === 'provider'
       ? [variable.name, ...(aliases[variable.name] ?? [])]
       : [variable.name]
     const value = variable.value ?? (variable.source === 'provider'
       ? candidates.map((name) => sourceEnv[name] || process.env[name]).find(Boolean)
-      : process.env[variable.name])
+      : process.env[variable.name] || destinationEnv[variable.name] || (authorityTokenNames.has(variable.name) ? randomBytes(32).toString('base64url') : undefined))
     if (value === undefined || value === '') {
       if (variable.required) {
         const diagnosticSource = variable.source === 'provider'
@@ -156,7 +166,7 @@ async function injectRuntimeEnvironment(
   } catch (error) {
     throw new Error(`runtime_target_service_unavailable:${projectName}/${contract.serviceName}:${error instanceof Error ? error.message : 'service_check_failed'}`)
   }
-  const values = await resolveRuntimeEnvironment(contract, target, provider)
+  const values = await resolveRuntimeEnvironment(contract, target, provider, { projectName, serviceName: contract.serviceName })
   try {
     await provider.updateEnv(projectName, contract.serviceName, values)
     await provider.deploy(projectName, contract.serviceName)
