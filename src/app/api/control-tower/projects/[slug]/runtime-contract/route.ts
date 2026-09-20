@@ -100,6 +100,19 @@ async function readSupabaseRuntimeEnv(provider: EasypanelSecretsProvider): Promi
   throw new Error(`runtime_secret_source_service_not_found:candidates=${candidates.map((item) => `${item.projectName}/${item.serviceName}`).join(',')}`)
 }
 
+function assertReachableDatabaseUrl(value: string): void {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error('runtime_database_url_invalid')
+  }
+  const host = parsed.hostname.toLowerCase()
+  if (['localhost', '127.0.0.1', '::1', 'db'].includes(host)) {
+    throw new Error(`runtime_database_endpoint_unreachable:${host}`)
+  }
+}
+
 async function resolveRuntimeEnvironment(
   contract: ReturnType<typeof buildRuntimeContract>,
   target: EasypanelTarget,
@@ -138,6 +151,7 @@ async function resolveRuntimeEnvironment(
       }
       continue
     }
+    if (variable.name === 'DATABASE_URL' && value) assertReachableDatabaseUrl(value)
     resolved[variable.name] = value
   }
   return resolved
