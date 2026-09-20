@@ -140,7 +140,7 @@ async function resolveRuntimeEnvironment(
       ? [variable.name, ...(aliases[variable.name] ?? [])]
       : [variable.name]
     const value = variable.value ?? (variable.source === 'provider'
-      ? candidates.map((name) => sourceEnv[name] || process.env[name]).find(Boolean)
+      ? candidates.map((name) => process.env[name] || sourceEnv[name]).find(Boolean)
       : process.env[variable.name] || destinationEnv[variable.name] || (authorityTokenNames.has(variable.name) ? randomBytes(32).toString('base64url') : undefined))
     if (value === undefined || value === '') {
       if (variable.required) {
