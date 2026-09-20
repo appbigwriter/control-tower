@@ -41,9 +41,38 @@ async function loadProject(slug: string): Promise<RuntimeContractProject | null>
   return { ...data, secret_namespace: namespace?.namespace ?? undefined } as RuntimeContractProject
 }
 
-const SUPABASE_RUNTIME_SOURCE: Record<EasypanelTarget, { projectName: string; serviceName: string }> = {
-  vps1: { projectName: 'supabase', serviceName: 'supabase-gestaodb' },
-  vps2: { projectName: 'supabase', serviceName: 'supabase-gestaodb' },
+const SUPABASE_RUNTIME_PROJECT = 'supabase'
+const SUPABASE_SERVICE_CANDIDATES = ['supabase-gestaodb', 'base', 'db', 'postgres', 'supabase-db'] as const
+
+function serviceNamesInProject(readback: unknown, projectName: string): string[] {
+  if (Array.isArray(readback)) return readback.flatMap((item) => serviceNamesInProject(item, projectName))
+  if (!readback || typeof readback !== 'object') return []
+  const record = readback as Record<string, unknown>
+  const name = typeof record.name === 'string' ? record.name : typeof record.projectName === 'string' ? record.projectName : undefined
+  const services = Array.isArray(record.services) ? record.services : []
+  const own = name === projectName ? services.flatMap((service) => {
+    if (!service || typeof service !== 'object') return []
+    const serviceRecord = service as Record<string, unknown>
+    const serviceName = serviceRecord.name ?? serviceRecord.serviceName
+    return typeof serviceName === 'string' ? [serviceName] : []
+  }) : []
+  return [...own, ...Object.values(record).flatMap((value) => serviceNamesInProject(value, projectName))]
+}
+
+async function readSupabaseRuntimeEnv(provider: EasypanelSecretsProvider): Promise<{ serviceName: string; env: Record<string, string> }> {
+  const catalog = await provider.listProjectsAndServices()
+  const discovered = serviceNamesInProject(catalog, SUPABASE_RUNTIME_PROJECT)
+  const candidates = [...new Set([...SUPABASE_SERVICE_CANDIDATES, ...discovered])]
+  for (const serviceName of candidates) {
+    try {
+      const readback = await provider.inspectAppService(SUPABASE_RUNTIME_PROJECT, serviceName)
+      const env = parseServiceEnv(readback)
+      if (env.DATABASE_URL || env.POSTGRES_HOST || env.SUPABASE_URL) return { serviceName, env }
+    } catch {
+      // Candidate does not exist or is not inspectable; continue discovery without exposing the error/value.
+    }
+  }
+  throw new Error(`runtime_secret_source_service_not_found:${SUPABASE_RUNTIME_PROJECT}:candidates=${candidates.join(',')}`)
 }
 
 async function resolveRuntimeEnvironment(
@@ -51,14 +80,8 @@ async function resolveRuntimeEnvironment(
   target: EasypanelTarget,
   provider: EasypanelSecretsProvider,
 ): Promise<Record<string, string>> {
-  const source = SUPABASE_RUNTIME_SOURCE[target]
-  let sourceReadback: unknown
-  try {
-    sourceReadback = await provider.inspectAppService(source.projectName, source.serviceName)
-  } catch (error) {
-    throw new Error(`runtime_secret_source_readback_failed:${source.projectName}/${source.serviceName}:${error instanceof Error ? error.message : 'inspect_failed'}`)
-  }
-  const sourceEnv = parseServiceEnv(sourceReadback)
+  const source = await readSupabaseRuntimeEnv(provider)
+  const sourceEnv = source.env
   const aliases: Record<string, string[]> = {
     SUPABASE_ANON_KEY: ['ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY'],
     SUPABASE_SERVICE_ROLE_KEY: ['SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY'],
@@ -68,7 +91,7 @@ async function resolveRuntimeEnvironment(
     const candidates = [variable.name, ...(aliases[variable.name] ?? [])]
     const value = variable.value ?? candidates.map((name) => sourceEnv[name] || process.env[name]).find(Boolean)
     if (value === undefined || value === '') {
-      if (variable.required) throw new Error(`runtime_variable_missing:${variable.name}:source=${source.projectName}/${source.serviceName}`)
+      if (variable.required) throw new Error(`runtime_variable_missing:${variable.name}:source=${SUPABASE_RUNTIME_PROJECT}/${source.serviceName}`)
       continue
     }
     resolved[variable.name] = value
@@ -109,7 +132,7 @@ async function injectRuntimeEnvironment(
   const readback = await provider.inspectAppService(projectName, contract.serviceName)
   const status = typeof (readback as { status?: unknown })?.status === 'string' ? (readback as { status: string }).status : 'NOT_VERIFIED'
   if (status !== 'running' && status !== 'deploying') throw new Error(`runtime_deploy_readback_not_healthy:${status}`)
-  return { target, projectName, serviceName: contract.serviceName, status, sourceService: `${SUPABASE_RUNTIME_SOURCE[target].projectName}/${SUPABASE_RUNTIME_SOURCE[target].serviceName}` }
+  return { target, projectName, serviceName: contract.serviceName, status, sourceService: `${SUPABASE_RUNTIME_PROJECT}/${(await readSupabaseRuntimeEnv(provider)).serviceName}` }
 }
 
 export async function POST(
