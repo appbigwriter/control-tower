@@ -3,7 +3,8 @@
 import { useState } from 'react'
 
 type ArtifactType = 'public_variables' | 'namespace' | 'validation_domain'
-type LoadingType = ArtifactType | 'dns_verification'
+type RuntimeAction = 'runtime_generate' | 'runtime_inject'
+type LoadingType = ArtifactType | RuntimeAction | 'dns_verification'
 
 type Props = {
   slug: string
@@ -31,6 +32,21 @@ const buttons: Array<{ type: ArtifactType; label: string; pending: string; class
   },
 ]
 
+const runtimeButtons: Array<{ type: RuntimeAction; label: string; pending: string; className: string }> = [
+  {
+    type: 'runtime_generate',
+    label: 'Gerar env',
+    pending: 'Gerando env...',
+    className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/15',
+  },
+  {
+    type: 'runtime_inject',
+    label: 'Injetar env no Easypanel',
+    pending: 'Injetando env...',
+    className: 'border-violet-300/20 bg-violet-300/10 text-violet-100 hover:bg-violet-300/15',
+  },
+]
+
 function downloadArtifact(filename: string, value: unknown) {
   const content = typeof value === 'string'
     ? value
@@ -50,21 +66,24 @@ export function ProjectConfigurationButtons({ slug, domain }: Props) {
   const [loading, setLoading] = useState<LoadingType | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  const generate = async (type: ArtifactType) => {
+  const generate = async (type: ArtifactType | RuntimeAction) => {
     setLoading(type)
     setMessage(null)
     try {
-      if (type === 'public_variables') {
+      if (type === 'runtime_generate' || type === 'runtime_inject') {
+        const inject = type === 'runtime_inject'
         const response = await fetch(`/api/control-tower/projects/${slug}/runtime-contract`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ environment: 'production', inject: true }),
+          body: JSON.stringify({ environment: 'production', inject }),
         })
         const result = await response.json()
-        if (!response.ok) throw new Error(result.error ?? 'Falha ao gerar env do runtime.')
+        if (!response.ok) throw new Error(result.error ?? (inject ? 'Falha ao injetar env no Easypanel.' : 'Falha ao gerar env do runtime.'))
         const contract = result.contract
         downloadArtifact(contract.env_filename, contract.env_document)
-        setMessage(`${contract.env_filename} gerado, injetado e validado no target ${result.delivery.target}.`)
+        setMessage(inject
+          ? `${contract.env_filename} injetado e validado no target ${result.delivery.target}.`
+          : `${contract.env_filename} gerado e salvo; valores privados permanecem como referências protegidas.`)
       } else {
         const response = await fetch(`/api/control-tower/projects/${slug}/configuration`, {
           method: 'POST',
@@ -124,6 +143,18 @@ export function ProjectConfigurationButtons({ slug, domain }: Props) {
         >
           {loading === 'dns_verification' ? 'Consultando DNS...' : 'Confirmar DNS (lookup)' }
         </button>
+        {runtimeButtons.map((button) => (
+          <button
+            key={button.type}
+            type="button"
+            onClick={() => generate(button.type)}
+            disabled={loading !== null}
+            title={button.type === 'runtime_generate' ? 'Gera e baixa env.<slug>; não injeta valores privados.' : 'Resolve bindings server-side e injeta no Easypanel.'}
+            className={`rounded-full border px-3 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${button.className}`}
+          >
+            {loading === button.type ? button.pending : button.label}
+          </button>
+        ))}
         {buttons.map((button) => (
           <button
             key={button.type}
