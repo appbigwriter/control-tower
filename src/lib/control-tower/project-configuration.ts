@@ -126,7 +126,7 @@ export function buildRuntimeInventory(project: RuntimeContractProject, environme
     name,
     kind: 'runtime_private',
     required: profile === 'authority' ? ['DATABASE_URL', 'AUTHORITY_OWNER_ID', 'AUTHORITY_ADMIN_TOKEN'].includes(name) : ['DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].includes(name),
-    source: name === 'SUPABASE_URL' ? 'provider' : 'secret_manager',
+    source: ['DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].includes(name) ? 'provider' : 'secret_manager',
     reference_path: `${secretNamespace}/${name}`,
     consumer: 'server',
     validation: 'present in provider and readable by runtime only',
