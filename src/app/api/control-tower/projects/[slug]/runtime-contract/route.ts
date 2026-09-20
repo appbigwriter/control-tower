@@ -73,7 +73,8 @@ async function readSupabaseRuntimeEnv(provider: EasypanelSecretsProvider): Promi
   const candidates = [...new Map([...preferred, ...defaults].map((item) => [`${item.projectName}/${item.serviceName}`, item])).values()]
   for (const candidate of candidates) {
     try {
-      const readback = await provider.inspectAppService(candidate.projectName, candidate.serviceName)
+      const readback = await provider.inspectComposeService?.(candidate.projectName, candidate.serviceName)
+      if (!readback) continue
       const env = parseServiceEnv(readback)
       if (env.DATABASE_URL || env.POSTGRES_HOST || env.SUPABASE_URL) return { ...candidate, env }
     } catch {

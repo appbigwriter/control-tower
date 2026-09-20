@@ -38,6 +38,8 @@ export interface DestroyReadback {
 export interface SecretsProvider {
   name: string
   injectSecrets(namespace: string, secrets: SecretPayload[]): Promise<void>
+  inspectAppService?(projectName: string, serviceName: string): Promise<unknown>
+  inspectComposeService?(projectName: string, serviceName: string): Promise<unknown>
   updateEnv?(projectName: string, serviceName: string, env: Record<string, string>): Promise<EasypanelMutationResponse>
   deploy?(projectName: string, serviceName: string): Promise<EasypanelMutationResponse>
   getStatus?(projectName: string, serviceName: string): Promise<ServiceStatusResult>
@@ -244,6 +246,10 @@ export class EasypanelSecretsProvider implements SecretsProvider {
 
   async inspectAppService(projectName: string, serviceName: string): Promise<unknown> {
     return this.get('inspectAppService', { projectName, serviceName })
+  }
+
+  async inspectComposeService(projectName: string, serviceName: string): Promise<unknown> {
+    return this.get('inspectComposeService', { projectName, serviceName })
   }
 
   async createAppService(projectName: string, serviceName: string): Promise<EasypanelMutationResponse> {
