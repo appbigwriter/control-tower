@@ -9,6 +9,7 @@ import {
   buildRuntimeContract,
   buildRuntimeInventory,
   buildServiceName,
+  runtimeEnvFilename,
 } from '../src/lib/control-tower/project-configuration.ts'
 
 const project = {
@@ -51,9 +52,26 @@ test('runtime contract gera inventário completo por ambiente sem valores secret
   const contractProject = { ...project, name: 'Authority Engine', slug: 'authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }
   const inventory = buildRuntimeInventory(contractProject, 'development')
   assert.ok(inventory.some((item) => item.name === 'DATABASE_URL' && item.required && item.reference_path?.startsWith('secret-manager:')))
+  assert.ok(inventory.some((item) => item.name === 'AUTHORITY_PROJECT_ID' && item.value === project.id && item.required))
+  assert.ok(inventory.some((item) => item.name === 'AUTHORITY_OWNER_ID' && item.required && item.reference_path?.startsWith('secret-manager:')))
+  assert.ok(inventory.some((item) => item.name === 'AUTHORITY_ADMIN_TOKEN' && item.required && item.reference_path?.startsWith('secret-manager:')))
   assert.ok(inventory.some((item) => item.name === 'CONTROL_TOWER_SCHEMA_NAME' && item.value === project.schema_name))
   assert.ok(inventory.every((item) => item.value !== undefined || item.reference_path !== undefined))
   assert.ok(inventory.every((item) => !('secret_value' in item)))
+})
+
+test('env document is explicit, complete and named by slug', () => {
+  const contractProject = { ...project, name: 'Authority Engine', slug: 'authorityengine', schema_name: 'custom_authorityengine', template_key: 'custom_base', template_version: '1.0.0', language: 'pt', status: 'active' }
+  const contract = buildRuntimeContract(contractProject, 'production')
+  assert.equal(runtimeEnvFilename('authorityengine', 'production'), 'env.authorityengine')
+  assert.equal(contract.envFilename, 'env.authorityengine')
+  assert.match(contract.envDocument, /^NODE_ENV=production/m)
+  assert.match(contract.envDocument, /^AUTHORITY_PROJECT_ID=11111111-1111-4111-8111-111111111111/m)
+  assert.match(contract.envDocument, /^AUTHORITY_OWNER_ID=<secret-manager:/m)
+  assert.match(contract.envDocument, /^DATABASE_URL=<secret-manager:/m)
+  assert.match(contract.envDocument, /^AUTHORITY_ADMIN_TOKEN=<secret-manager:/m)
+  assert.match(contract.envDocument, /^PORT=3400/m)
+  assert.ok(contract.envDocument.split('\n').filter(Boolean).length >= 15)
 })
 
 test('serviceName deriva do primeiro nome do projeto', () => {

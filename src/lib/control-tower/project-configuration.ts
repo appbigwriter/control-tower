@@ -53,6 +53,7 @@ export function buildArtifact(project: ProjectConfigurationProject, type: Artifa
 export type RuntimeEnvironment = 'development' | 'staging' | 'production'
 export type RuntimeVariableKind = 'public' | 'runtime_private' | 'optional'
 export type RuntimeVariableSource = 'derived' | 'secret_manager' | 'provider' | 'operator_input'
+export type RuntimeProfile = 'authority' | 'generic'
 
 export type RuntimeVariable = {
   name: string
@@ -72,11 +73,16 @@ export type RuntimeContractProject = ProjectConfigurationProject & {
   template_version: string
   language: string
   status: string
+  hosting_target?: 'vps1' | 'vps2' | null
+  hosting_project_name?: string | null
+  service_name?: string | null
 }
 
 const secretNames = [
   'DATABASE_URL',
+  'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
+  'AUTHORITY_OWNER_ID',
   'AUTHORITY_ADMIN_TOKEN',
   'AUTHORITY_OPERATOR_TOKEN',
   'AUTHORITY_REVIEWER_TOKEN',
@@ -84,23 +90,44 @@ const secretNames = [
   'AUTHORITY_VIEWER_TOKEN',
 ] as const
 
+export function runtimeProfileOf(project: Pick<RuntimeContractProject, 'slug' | 'schema_name'>): RuntimeProfile {
+  return project.schema_name === 'custom_authorityengine' || project.slug === 'authorityengine' ? 'authority' : 'generic'
+}
+
+export function runtimeEnvFilename(slug: string, environment: RuntimeEnvironment): string {
+  return environment === 'production' ? `env.${slug}` : `env.${slug}.${environment}`
+}
+
 export function buildRuntimeInventory(project: RuntimeContractProject, environment: RuntimeEnvironment): RuntimeVariable[] {
   const namespace = buildNamespace(project)
   const secretNamespace = namespace.startsWith('secret-manager:') ? namespace : `secret-manager:${namespace}`
+  const profile = runtimeProfileOf(project)
   const derived: RuntimeVariable[] = [
     { name: 'NODE_ENV', kind: 'public', required: true, source: 'derived', value: environment === 'production' ? 'production' : environment, consumer: 'server', validation: 'one of development|staging|production' },
     { name: 'APP_ENV', kind: 'public', required: true, source: 'derived', value: environment, consumer: 'server', validation: 'matches environment' },
+    { name: 'CONTROL_TOWER_BASE_URL', kind: 'public', required: true, source: 'derived', value: 'https://control-tower.fbr.news', consumer: 'server', validation: 'valid https URL' },
     { name: 'CONTROL_TOWER_PROJECT_ID', kind: 'public', required: true, source: 'derived', value: project.id, consumer: 'server', validation: 'equals catalog project_id' },
     { name: 'CONTROL_TOWER_SCHEMA_NAME', kind: 'public', required: true, source: 'derived', value: project.schema_name, consumer: 'server', validation: 'equals catalog schema_name' },
-    { name: 'CONTROL_TOWER_BASE_URL', kind: 'public', required: true, source: 'derived', value: 'https://control-tower.fbr.news', consumer: 'server', validation: 'valid https URL' },
-    { name: 'SUPABASE_URL', kind: 'runtime_private', required: true, source: 'provider', reference_path: `${secretNamespace}/SUPABASE_URL`, consumer: 'server', validation: 'valid https URL' },
+    ...(profile === 'authority' ? [{ name: 'AUTHORITY_PROJECT_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: project.id, consumer: 'server' as const, validation: 'equals catalog project_id' }] : []),
   ]
-  const secrets: RuntimeVariable[] = secretNames.map((name) => ({ name, kind: 'runtime_private', required: name === 'DATABASE_URL' || name === 'SUPABASE_SERVICE_ROLE_KEY', source: 'secret_manager', reference_path: `${secretNamespace}/${name}`, consumer: 'server', validation: 'present in provider and readable by runtime only' }))
+  const secrets: RuntimeVariable[] = secretNames.map((name) => ({
+    name,
+    kind: 'runtime_private',
+    required: profile === 'authority' ? ['DATABASE_URL', 'AUTHORITY_OWNER_ID', 'AUTHORITY_ADMIN_TOKEN'].includes(name) : ['DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].includes(name),
+    source: name === 'SUPABASE_URL' ? 'provider' : 'secret_manager',
+    reference_path: `${secretNamespace}/${name}`,
+    consumer: 'server',
+    validation: 'present in provider and readable by runtime only',
+  }))
   const optional: RuntimeVariable[] = [
     { name: 'PORT', kind: 'optional', required: false, source: 'derived', value: '3400', consumer: 'server', validation: 'integer 1..65535' },
     { name: 'HOST', kind: 'optional', required: false, source: 'derived', value: '0.0.0.0', consumer: 'server', validation: 'valid bind host' },
   ]
   return [...derived, ...secrets, ...optional]
+}
+
+export function renderRuntimeEnvDocument(contract: ReturnType<typeof buildRuntimeContract>): string {
+  return contract.inventory.map((variable) => `${variable.name}=${variable.value ?? `<${variable.reference_path ?? `runtime:${variable.name}`}>`}`).join('\n') + '\n'
 }
 
 export function buildServiceName(project: Pick<RuntimeContractProject, 'name'>): string {
@@ -112,17 +139,21 @@ export function buildServiceName(project: Pick<RuntimeContractProject, 'name'>):
 
 export function buildRuntimeContract(project: RuntimeContractProject, environment: RuntimeEnvironment = 'development') {
   const inventory = buildRuntimeInventory(project, environment)
-  return {
+  const contract = {
     contractVersion: '1.0.0',
     project: { id: project.id, name: project.name, slug: project.slug, businessType: project.business_type, templateKey: project.template_key, templateVersion: project.template_version, schemaName: project.schema_name, domain: project.domain, language: project.language, status: project.status },
     environment,
     namespace: buildNamespace(project),
-    serviceName: buildServiceName(project),
+    serviceName: project.service_name ?? buildServiceName(project),
+    envFilename: runtimeEnvFilename(project.slug, environment),
     inventory,
+    envDocument: '',
     states: ['generated', 'registered', 'delivered', 'verified'] as const,
     status: 'generated' as const,
     generatedAt: new Date().toISOString(),
   }
+  contract.envDocument = renderRuntimeEnvDocument(contract)
+  return contract
 }
 
 export function renderRuntimeDeveloperDocument(contract: ReturnType<typeof buildRuntimeContract>): string {

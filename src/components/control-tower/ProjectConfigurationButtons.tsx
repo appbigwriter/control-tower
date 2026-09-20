@@ -54,15 +54,28 @@ export function ProjectConfigurationButtons({ slug, domain }: Props) {
     setLoading(type)
     setMessage(null)
     try {
-      const response = await fetch(`/api/control-tower/projects/${slug}/configuration`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
-      })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error ?? 'Falha ao gerar configuração.')
-      downloadArtifact(result.artifact.filename, result.artifact.value)
-      setMessage('Gerado e salvo no banco.')
+      if (type === 'public_variables') {
+        const response = await fetch(`/api/control-tower/projects/${slug}/runtime-contract`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ environment: 'production', inject: true }),
+        })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error ?? 'Falha ao gerar env do runtime.')
+        const contract = result.contract
+        downloadArtifact(contract.env_filename, contract.env_document)
+        setMessage(`${contract.env_filename} gerado, injetado e validado no target ${result.delivery.target}.`)
+      } else {
+        const response = await fetch(`/api/control-tower/projects/${slug}/configuration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type }),
+        })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error ?? 'Falha ao gerar configuração.')
+        downloadArtifact(result.artifact.filename, result.artifact.value)
+        setMessage('Gerado e salvo no banco.')
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Falha ao gerar configuração.')
     } finally {
