@@ -50,6 +50,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const body = (await req.json().catch(() => ({}))) as {
       transition?: DomainVerificationState
       force?: boolean
+      mode?: 'dns_lookup' | 'dns_and_health'
     }
 
     const supabase = createServiceRoleClient()
@@ -75,6 +76,44 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const currentState: DomainVerificationState = (existing as VerificationRow | null)?.state ?? 'domain_generated'
     const attempts = (existing as VerificationRow | null)?.attempts ?? 0
+
+    // DNS-only preflight: confirms resolution without requiring the app health endpoint.
+    if (body.mode === 'dns_lookup') {
+      const host = project.domain.replace(/^https?:\/\//i, '').replace(/\/.*$/, '')
+      const dns = await createRealDomainVerificationAdapter().lookupDns(host)
+      const lookupOk = dns.addresses.length > 0 && !dns.error
+      const nextState: DomainVerificationState = lookupOk ? 'dns_manual_confirmed' : 'dns_failed'
+      const { error: lookupPersistError } = await supabase
+        .from('project_domain_verification')
+        .upsert({
+          project_id: project.id,
+          domain: project.domain,
+          state: nextState,
+          attempts: attempts + 1,
+          last_error: dns.error,
+          next_check_at: null,
+          health_readback_id: null,
+          evidence: { dns },
+        })
+      if (lookupPersistError) {
+        return NextResponse.json({ error: `Falha ao persistir DNS lookup: ${lookupPersistError.message}` }, { status: 500 })
+      }
+      await supabase.from('audit_logs').insert({
+        project_id: project.id,
+        action: lookupOk ? 'domain.dns_lookup_confirmed' : 'domain.dns_lookup_failed',
+        resource_type: 'project_domain_verification',
+        resource_id: project.id,
+        metadata: { actor, state: nextState, addresses: dns.addresses, error: dns.error },
+      })
+      return NextResponse.json({
+        state: nextState,
+        dns_lookup_ok: lookupOk,
+        provision_allowed: false,
+        health_pending: true,
+        evidence: { dns },
+        error: dns.error,
+      })
+    }
 
     // Manual transition path (e.g. awaiting_dns → dns_manual_confirmed).
     if (body.transition) {

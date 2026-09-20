@@ -78,25 +78,19 @@ export function ProjectConfigurationButtons({ slug, domain }: Props) {
     setLoading('dns_verification')
     setMessage(null)
     try {
-      const confirmResponse = await fetch(`/api/control-tower/projects/${slug}/domain-verification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transition: 'dns_manual_confirmed', force: true }),
-      })
-      const confirmed = await confirmResponse.json()
-      if (!confirmResponse.ok) throw new Error(confirmed.error ?? 'Falha ao registrar confirmação de DNS.')
-
       const verifyResponse = await fetch(`/api/control-tower/projects/${slug}/domain-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ mode: 'dns_lookup' }),
       })
       const result = await verifyResponse.json()
-      if (!verifyResponse.ok) throw new Error(result.error ?? 'Falha ao verificar DNS e health.')
-      if (result.state !== 'dns_verified') {
-        throw new Error(result.error ?? `DNS não confirmado tecnicamente: ${result.state}`)
+      if (!verifyResponse.ok) throw new Error(result.error ?? 'Falha ao consultar DNS.')
+      if (!result.dns_lookup_ok) {
+        const dnsEvidence = result.evidence?.dns
+        throw new Error(`DNS não resolve${dnsEvidence?.error ? `: ${dnsEvidence.error}` : '.'}`)
       }
-      setMessage(`DNS confirmado e /health verificado. Readback: ${result.health_readback_id ?? 'registrado'}.`)
+      const addresses = result.evidence?.dns?.addresses?.join(', ') ?? 'endereço registrado'
+      setMessage(`DNS confirmado por lookup (${addresses}). Health pendente até o deploy da aplicação.`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Falha ao verificar DNS.')
     } finally {
@@ -112,10 +106,10 @@ export function ProjectConfigurationButtons({ slug, domain }: Props) {
           type="button"
           onClick={verifyDns}
           disabled={loading !== null || !domain}
-          title={domain ? 'Confirma o DNS e verifica o endpoint /health' : 'Defina o domínio primeiro'}
+          title={domain ? 'Consulta o DNS agora; o health será verificado após a construção da aplicação' : 'Defina o domínio primeiro'}
           className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-xs font-medium text-emerald-100 transition hover:bg-emerald-300/15 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading === 'dns_verification' ? 'Verificando DNS...' : 'Confirmar DNS e Health'}
+          {loading === 'dns_verification' ? 'Consultando DNS...' : 'Confirmar DNS (lookup)' }
         </button>
         {buttons.map((button) => (
           <button
