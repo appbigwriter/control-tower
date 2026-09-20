@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, hasRequiredScope, isAdminSessionActive, type AuthenticatedPrincipal } from '@/lib/auth/control-tower'
-import { EasypanelSecretsProvider, easypanelTargetEnv, type EasypanelTarget } from '@/lib/secrets/adapter'
+import { EasypanelSecretsProvider, easypanelTargetEnv, parseServiceEnv, type EasypanelTarget } from '@/lib/secrets/adapter'
 import {
   buildRuntimeContract,
   renderRuntimeDeveloperDocument,
@@ -41,12 +41,29 @@ async function loadProject(slug: string): Promise<RuntimeContractProject | null>
   return { ...data, secret_namespace: namespace?.namespace ?? undefined } as RuntimeContractProject
 }
 
-function resolveRuntimeEnvironment(contract: ReturnType<typeof buildRuntimeContract>): Record<string, string> {
+const SUPABASE_RUNTIME_SOURCE: Record<EasypanelTarget, { projectName: string; serviceName: string }> = {
+  vps1: { projectName: 'supabase', serviceName: 'supabase-gestaodb' },
+  vps2: { projectName: 'supabase', serviceName: 'supabase-gestaodb' },
+}
+
+async function resolveRuntimeEnvironment(
+  contract: ReturnType<typeof buildRuntimeContract>,
+  target: EasypanelTarget,
+  provider: EasypanelSecretsProvider,
+): Promise<Record<string, string>> {
+  const source = SUPABASE_RUNTIME_SOURCE[target]
+  const sourceReadback = await provider.inspectAppService(source.projectName, source.serviceName)
+  const sourceEnv = parseServiceEnv(sourceReadback)
+  const aliases: Record<string, string[]> = {
+    SUPABASE_ANON_KEY: ['ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY'],
+    SUPABASE_SERVICE_ROLE_KEY: ['SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY'],
+  }
   const resolved: Record<string, string> = {}
   for (const variable of contract.inventory) {
-    const value = variable.value ?? process.env[variable.name]
+    const candidates = [variable.name, ...(aliases[variable.name] ?? [])]
+    const value = variable.value ?? candidates.map((name) => sourceEnv[name] || process.env[name]).find(Boolean)
     if (value === undefined || value === '') {
-      if (variable.required) throw new Error(`runtime_variable_missing:${variable.name}`)
+      if (variable.required) throw new Error(`runtime_variable_missing:${variable.name}:source=${source.projectName}/${source.serviceName}`)
       continue
     }
     resolved[variable.name] = value
@@ -57,20 +74,20 @@ function resolveRuntimeEnvironment(contract: ReturnType<typeof buildRuntimeContr
 async function injectRuntimeEnvironment(
   project: RuntimeContractProject,
   contract: ReturnType<typeof buildRuntimeContract>,
-): Promise<{ target: string; projectName: string; serviceName: string; status: string }> {
+): Promise<{ target: string; projectName: string; serviceName: string; status: string; sourceService: string }> {
   const target = project.hosting_target
   if (target !== 'vps1' && target !== 'vps2') throw new Error('hosting_target_required_for_runtime_injection')
   const envNames = easypanelTargetEnv(target)
   const projectName = project.hosting_project_name?.trim() || process.env[envNames.projectName]?.trim()
   if (!projectName) throw new Error(`easypanel_project_name_missing:${target}`)
-  const values = resolveRuntimeEnvironment(contract)
   const provider = new EasypanelSecretsProvider(target)
+  const values = await resolveRuntimeEnvironment(contract, target, provider)
   await provider.updateEnv(projectName, contract.serviceName, values)
   await provider.deploy(projectName, contract.serviceName)
   const readback = await provider.inspectAppService(projectName, contract.serviceName)
   const status = typeof (readback as { status?: unknown })?.status === 'string' ? (readback as { status: string }).status : 'NOT_VERIFIED'
   if (status !== 'running' && status !== 'deploying') throw new Error(`runtime_deploy_readback_not_healthy:${status}`)
-  return { target, projectName, serviceName: contract.serviceName, status }
+  return { target, projectName, serviceName: contract.serviceName, status, sourceService: `${SUPABASE_RUNTIME_SOURCE[target].projectName}/${SUPABASE_RUNTIME_SOURCE[target].serviceName}` }
 }
 
 export async function POST(

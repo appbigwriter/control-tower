@@ -128,6 +128,20 @@ export function readbackHasService(readback: unknown, projectName: string, servi
   return Object.values(record).some((value) => readbackHasService(value, projectName, serviceName))
 }
 
+export function parseServiceEnv(readback: unknown): Record<string, string> {
+  const record = asRecord(readback)
+  if (!record || typeof record.env !== 'string') return {}
+  const values: Record<string, string> = {}
+  for (const line of record.env.split(/\r?\n/)) {
+    const separator = line.indexOf('=')
+    if (separator <= 0) continue
+    const key = line.slice(0, separator).trim()
+    const value = line.slice(separator + 1)
+    if (key) values[key] = value
+  }
+  return values
+}
+
 function inspectContainsEnv(readback: unknown, env: Record<string, string>): boolean {
   const record = asRecord(readback)
   if (!record || typeof record.env !== 'string') return false
