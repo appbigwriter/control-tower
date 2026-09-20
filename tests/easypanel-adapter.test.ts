@@ -32,6 +32,11 @@ test('normaliza uma URL base para exatamente um /api', () => {
   assert.equal(normalizeEasypanelApiUrl('http://easypanel.internal/api'), 'http://easypanel.internal/api')
 })
 
+test('aceita resposta vazia de mutação Easypanel como sucesso transportado', async () => {
+  setupRuntime()
+  globalThis.fetch = (async () => new Response(null, { status: 204 })) as typeof fetch
+  await assert.doesNotReject(() => new EasypanelSecretsProvider().updateEnv('projetos', 'gestaodb', { A: 'B' }))
+})
 test('falha fechado quando o token não existe', async () => {
   process.env.EASYPANEL_API_URL = 'http://easypanel.internal'
   delete process.env.EASYPANEL_API_TOKEN

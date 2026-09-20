@@ -227,7 +227,13 @@ export class EasypanelSecretsProvider implements SecretsProvider {
       body: JSON.stringify(body),
     })
     if (!response.ok) throw new Error(`[EasypanelSecretsProvider] ${endpoint} falhou com HTTP ${response.status}`)
-    return await response.json() as EasypanelMutationResponse
+    const raw = await response.text()
+    if (!raw.trim()) return {}
+    try {
+      return JSON.parse(raw) as EasypanelMutationResponse
+    } catch {
+      throw new Error(`[EasypanelSecretsProvider] ${endpoint} retornou JSON inválido`)
+    }
   }
 
   private async get(endpoint: string, params?: Record<string, string | number | undefined>): Promise<unknown> {
