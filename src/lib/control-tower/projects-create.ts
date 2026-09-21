@@ -39,6 +39,7 @@ function runtimeMetadata(input: CreateProjectInput) {
   const target = deriveHostingTarget(input.hosting_target, input.name, input.hosting_project_name)
   return {
     repository_url: input.repository_url,
+    repository_path: '/09-codigo',
     hosting_target: target.target,
     hosting_project_name: target.projectName,
     service_name: target.serviceName,
@@ -51,7 +52,7 @@ async function persistRuntimeMetadata(supabase: SupabaseLike, projectId: string,
     .from('projects')
     .update(metadata)
     .eq('id', projectId)
-    .select('id, repository_url, hosting_target, hosting_project_name, service_name')
+    .select('id, repository_url, repository_path, hosting_target, hosting_project_name, service_name')
     .single()
   if (error || !data) return { ok: false as const, error: error?.message ?? 'runtime metadata readback missing' }
   return { ok: true as const, data }

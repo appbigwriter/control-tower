@@ -76,6 +76,7 @@ export type RuntimeContractProject = ProjectConfigurationProject & {
   status: string
   hosting_target?: 'vps1' | 'vps2' | null
   hosting_project_name?: string | null
+  repository_path?: string | null
   service_name?: string | null
   authority_owner_id?: string | null
 }

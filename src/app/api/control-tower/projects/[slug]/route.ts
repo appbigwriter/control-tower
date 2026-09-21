@@ -46,6 +46,7 @@ export async function PATCH(
       name,
       domain,
       repository_url: repositoryUrl,
+      repository_path: '/09-codigo',
       hosting_target: target.target,
       hosting_project_name: target.projectName,
       service_name: target.serviceName,
@@ -56,7 +57,7 @@ export async function PATCH(
       .from('projects')
       .update(metadata)
       .eq('id', project.id)
-      .select('id, name, slug, domain, repository_url, hosting_target, hosting_project_name, service_name, updated_at')
+      .select('id, name, slug, domain, repository_url, repository_path, hosting_target, hosting_project_name, service_name, updated_at')
       .single()
 
     if (error || !data) {
@@ -70,7 +71,7 @@ export async function PATCH(
       resource_id: project.id,
       metadata: {
         actor: principal?.name ?? 'admin-session',
-        fields: ['name', 'domain', 'repository_url', 'hosting_target', 'hosting_project_name', 'service_name'],
+        fields: ['name', 'domain', 'repository_url', 'repository_path', 'hosting_target', 'hosting_project_name', 'service_name'],
       },
     })
 

@@ -18,6 +18,7 @@ type ProjectRow = {
   authority_owner_id?: string | null
   hosting_target?: 'vps1' | 'vps2' | null
   hosting_project_name?: string | null
+  repository_path?: string | null
   service_name?: string | null
 }
 
@@ -224,6 +225,7 @@ function buildConsolidatedDoc(project: ProjectRow, runtimeDocument: string): str
     `- **Domínio de validação:** ${validationDomain}`,
     `- **Namespace:** \`${namespace}\``,
     `- **Target:** \`${target}\``,
+    `- **Repository path:** \`${project.repository_path ?? '/09-codigo'}\``,
     `- **Easypanel project:** \`${project.hosting_project_name ?? 'não definido'}\``,
     `- **Easypanel service:** \`${service}\``,
     '',
@@ -238,11 +240,12 @@ function buildConsolidatedDoc(project: ProjectRow, runtimeDocument: string): str
     '## 3. Procedimento manual no Easypanel',
     '',
     '1. Abra o projeto e o serviço informados acima.',
-    '2. Abra **Environment**; o destino padrão do serviço é `.env`.',
-    '3. Informe as variáveis exatamente com os nomes do bloco `env`.',
-    '4. Nunca cole o bloco em Git, chat, ticket ou log.',
-    '5. Salve o Environment e execute **Deploy**.',
-    '6. Verifique o domínio de validação e aguarde HTTP 200.',
+    '2. Configure o source path do repositório como `/09-codigo` (valor padrão persistido no catálogo).',
+    '3. Abra **Environment**; o destino padrão do serviço é `.env`.',
+    '4. Informe as variáveis exatamente com os nomes do bloco `env`.',
+    '5. Nunca cole o bloco em Git, chat, ticket ou log.',
+    '6. Salve o Environment e execute **Deploy**.',
+    '7. Verifique o domínio de validação e aguarde HTTP 200.',
     '',
     '### Classificação das variáveis',
     '',
@@ -288,7 +291,7 @@ export async function GET(
   const { data, error } = await supabase
     .from('projects')
     .select(
-      'id, name, slug, business_type, template_key, schema_name, domain, status, template_version, language, created_at, authority_owner_id, hosting_target, hosting_project_name, service_name',
+      'id, name, slug, business_type, template_key, schema_name, domain, status, template_version, language, created_at, authority_owner_id, hosting_target, hosting_project_name, repository_path, service_name',
     )
     .eq('slug', slug)
     .maybeSingle()
