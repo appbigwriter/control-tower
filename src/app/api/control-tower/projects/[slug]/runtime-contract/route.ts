@@ -124,10 +124,15 @@ async function resolveRuntimeEnvironment(
   const destinationReadback = await provider.inspectAppService(destination.projectName, destination.serviceName)
   const destinationEnv = parseServiceEnv(destinationReadback)
   const aliases: Record<string, string[]> = {
-    SUPABASE_ANON_KEY: ['ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY'],
-    SUPABASE_SERVICE_ROLE_KEY: ['SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY'],
+    SUPABASE_ANON_KEY: ['ANON_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY'],
+    SUPABASE_SERVICE_ROLE_KEY: ['SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY'],
   }
   const resolved: Record<string, string> = {}
+  const databasePassword = sourceEnv.POSTGRES_PASSWORD?.trim()
+  const poolerTenant = 'supabase-vps2'
+  if (databasePassword && sourceEnv.POSTGRES_PASSWORD !== '<POSTGRES_PASSWORD>' && !databasePassword.includes('your-tenant')) {
+    resolved.DATABASE_URL = `postgresql://postgres.${poolerTenant}:${encodeURIComponent(databasePassword)}@76.13.168.223:15432/postgres`
+  }
   const authorityTokenNames = new Set([
     'AUTHORITY_ADMIN_TOKEN',
     'AUTHORITY_OPERATOR_TOKEN',
@@ -139,9 +144,12 @@ async function resolveRuntimeEnvironment(
     const candidates = variable.source === 'provider'
       ? [variable.name, ...(aliases[variable.name] ?? [])]
       : [variable.name]
-    const value = variable.value ?? (variable.source === 'provider'
-      ? candidates.map((name) => process.env[name] || sourceEnv[name]).find(Boolean)
-      : process.env[variable.name] || destinationEnv[variable.name] || (authorityTokenNames.has(variable.name) ? randomBytes(32).toString('base64url') : undefined))
+    const isPlaceholder = (candidate: string | undefined) => Boolean(candidate && /<|GENERATED|your-tenant|PLACEHOLDER|SUPABASE_CENTRAL/i.test(candidate))
+    const providerValue = candidates.map((name) => process.env[name] || sourceEnv[name]).find((candidate) => candidate && !isPlaceholder(candidate))
+    const runtimeValue = process.env[variable.name] || destinationEnv[variable.name]
+    const value = variable.value ?? resolved[variable.name] ?? (variable.source === 'provider'
+      ? providerValue
+      : (!isPlaceholder(runtimeValue) && runtimeValue) || (authorityTokenNames.has(variable.name) ? randomBytes(32).toString('base64url') : undefined))
     if (value === undefined || value === '') {
       if (variable.required) {
         const diagnosticSource = variable.source === 'provider'
