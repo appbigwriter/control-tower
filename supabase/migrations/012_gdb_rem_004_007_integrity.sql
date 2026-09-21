@@ -454,7 +454,7 @@ begin
 
   -- ===== GDB-REM-006: idempotencia =====
   if p_idempotency_key is null or length(btrim(p_idempotency_key)) < 8 or length(btrim(p_idempotency_key)) > 128 then
-    raise exception 'GDB_INVALID_IDEMPOTENCY_KEY: Idempotency-Key obrigatoria (8-128 caracteres)', p_idempotency_key
+    raise exception 'GDB_INVALID_IDEMPOTENCY_KEY: Idempotency-Key obrigatoria (8-128 caracteres), recebida "%"', p_idempotency_key
       using errcode = 'GD005';
   end if;
 
