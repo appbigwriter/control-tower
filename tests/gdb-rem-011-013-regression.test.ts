@@ -200,7 +200,7 @@ test('delete: sucesso remove schema com readback ANTES de remover o catálogo', 
   assert.ok(state.auditLogs.some((a) => a.action === 'project.deleted'))
   // Readback acontece entre drop e delete do catálogo.
   const dropIdx = dropOrder.indexOf('drop:' + project.schema_name)
-  const readbackIdx = dropOrder.indexOf('readback:' + project.schema_name)
+  const readbackIdx = dropOrder.findIndex((entry, index) => index > dropIdx && entry === 'readback:' + project.schema_name)
   const catalogIdx = dropOrder.indexOf('catalog-delete')
   assert.ok(dropIdx >= 0 && readbackIdx > dropIdx && catalogIdx > readbackIdx)
 })

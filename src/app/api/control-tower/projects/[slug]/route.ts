@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { authenticateToken, isAdminSessionActive } from '@/lib/auth/control-tower'
-import { deriveHostingTarget, type HostingTarget } from '@/lib/control-tower/provisioning'
+import { deriveHostingTarget, validateHostingProject, type HostingProjectName, type HostingTarget } from '@/lib/control-tower/provisioning'
+import { validateBusinessTypeTemplatePair } from '@/lib/control-tower/provisioning'
 import {
   loadProjectBySlug,
   deleteProject,
@@ -24,33 +25,42 @@ export async function PATCH(
 
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const nextSlug = typeof body.slug === 'string' ? body.slug.trim() : slug
     const domain = typeof body.domain === 'string' ? body.domain.trim() : ''
     const repositoryUrl = typeof body.repository_url === 'string' ? body.repository_url.trim() : ''
+    const repositoryPath = typeof body.repository_path === 'string' && body.repository_path.trim() ? body.repository_path.trim() : '/09-codigo'
     const hostingTarget = body.hosting_target
+    const hostingProjectName = body.hosting_project_name
+    const businessType = typeof body.business_type === 'string' ? body.business_type : ''
+    const templateKey = typeof body.template_key === 'string' ? body.template_key : ''
+    const schemaName = typeof body.schema_name === 'string' ? body.schema_name.trim() : ''
+    const language = typeof body.language === 'string' ? body.language : 'pt'
 
     if (!name) return NextResponse.json({ error: 'name é obrigatório' }, { status: 400 })
+    if (!/^[a-z0-9_]+$/.test(nextSlug)) return NextResponse.json({ error: 'slug deve conter apenas letras minúsculas, números e underscore' }, { status: 400 })
     if (!domain) return NextResponse.json({ error: 'domain é obrigatório' }, { status: 400 })
-    if (!/^https?:\/\/[^\s]+$/i.test(repositoryUrl)) {
-      return NextResponse.json({ error: 'repository_url deve ser uma URL http(s)' }, { status: 400 })
-    }
-    if (hostingTarget !== 'vps1' && hostingTarget !== 'vps2') {
-      return NextResponse.json({ error: 'hosting_target deve ser vps1 ou vps2' }, { status: 400 })
-    }
+    if (!/^https?:\/\/[^\s]+$/i.test(repositoryUrl)) return NextResponse.json({ error: 'repository_url deve ser uma URL http(s)' }, { status: 400 })
+    if (!/^[_a-z][_a-z0-9]*$/.test(schemaName)) return NextResponse.json({ error: 'schema_name inválido' }, { status: 400 })
+    if (hostingTarget !== 'vps1' && hostingTarget !== 'vps2') return NextResponse.json({ error: 'hosting_target deve ser vps1 ou vps2' }, { status: 400 })
+    if (!validateHostingProject(hostingProjectName, hostingTarget)) return NextResponse.json({ error: 'hosting_project_name não corresponde ao hosting_target' }, { status: 400 })
+    const pair = validateBusinessTypeTemplatePair(businessType, templateKey)
+    if (!pair.ok) return NextResponse.json({ error: pair.error, code: pair.code }, { status: 422 })
+    if (!['pt', 'en', 'es'].includes(language)) return NextResponse.json({ error: 'language inválido' }, { status: 400 })
 
     const client = createServiceRoleClient() as any
     const project = await loadProjectBySlug(client, slug)
     if (!project) return NextResponse.json({ error: 'Projeto não encontrado' }, { status: 404 })
 
-    const target = deriveHostingTarget(hostingTarget as HostingTarget, name)
+    if (nextSlug !== slug) {
+      const { data: conflict } = await client.from('projects').select('id').eq('slug', nextSlug).maybeSingle()
+      if (conflict && conflict.id !== project.id) return NextResponse.json({ error: 'slug já utilizado por outro projeto' }, { status: 409 })
+    }
+    const target = deriveHostingTarget(hostingTarget as HostingTarget, name, hostingProjectName as HostingProjectName)
     const metadata = {
-      name,
-      domain,
-      repository_url: repositoryUrl,
-      repository_path: '/09-codigo',
-      hosting_target: target.target,
-      hosting_project_name: target.projectName,
-      service_name: target.serviceName,
-      updated_at: new Date().toISOString(),
+      name, slug: nextSlug, domain, repository_url: repositoryUrl, repository_path: repositoryPath,
+      business_type: pair.businessType, template_key: pair.templateKey, schema_name: schemaName,
+      language, hosting_target: target.target, hosting_project_name: target.projectName,
+      service_name: target.serviceName, updated_at: new Date().toISOString(),
     }
 
     const { data, error } = await client

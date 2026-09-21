@@ -180,10 +180,9 @@ export async function deleteProject(
           {
             name: 'drop_project_schema',
             execute: async () => {
-              // GDB-REM-003: dedicated RPC validates that the dropped schema
-              // is the canonical schema of this project; governance schemas
-              // are rejected. The old execute_project_schema_sql route with
-              // p_schema_name='public' is now blocked server-side.
+              const beforeDrop = await readbackSchemaExists(client, schemaName)
+              if (beforeDrop.error) throw new Error(`schema preflight inconclusive: ${beforeDrop.error}`)
+              if (!beforeDrop.exists) return null
               const { error } = await client.rpc('drop_project_schema', {
                 p_project_slug: project.slug,
                 p_actor: `api-delete:${actor}`,

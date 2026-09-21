@@ -20,6 +20,7 @@ type ProjectRow = {
   schema_name: string
   domain: string | null
   repository_url: string | null
+  repository_path: string | null
   hosting_target: 'vps1' | 'vps2' | null
   hosting_project_name: string | null
   service_name: string | null
@@ -101,7 +102,7 @@ export default async function ControlTowerPage() {
       supabase
         .from('projects')
         .select(
-          'id, name, slug, business_type, template_key, schema_name, domain, repository_url, hosting_target, hosting_project_name, service_name, status, template_version, created_at',
+          'id, name, slug, business_type, template_key, schema_name, domain, repository_url, repository_path, hosting_target, hosting_project_name, service_name, status, template_version, created_at',
         )
         .order('created_at', { ascending: true }),
       supabase
@@ -357,6 +358,12 @@ export default async function ControlTowerPage() {
                       <EditProjectButton
                         slug={project.slug}
                         name={project.name}
+                        businessType={project.business_type}
+                        templateKey={project.template_key}
+                        schemaName={project.schema_name}
+                        hostingProjectName={project.hosting_project_name}
+                        repositoryPath={project.repository_path}
+                        language="pt"
                         domain={project.domain}
                         repositoryUrl={project.repository_url}
                         hostingTarget={project.hosting_target}
