@@ -180,12 +180,36 @@ where id = '${project.id}';
 `
 }
 
+function buildManualEnvDocument(project: ProjectRow, runtimeDocument: string): string {
+  const textualValues: Record<string, string> = {
+    DATABASE_URL: '<SUPABASE_CENTRAL_DATABASE_URL_ACCESSIBLE_FROM_RUNTIME>',
+    SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? 'https://supabase-control-tower-api.fbr.news',
+    SUPABASE_SERVICE_ROLE_KEY: '<SUPABASE_CENTRAL_SERVICE_ROLE_KEY>',
+    CONTROL_TOWER_PROJECT_ID: project.id,
+    CONTROL_TOWER_SCHEMA_NAME: project.schema_name,
+    AUTHORITY_PROJECT_ID: project.id,
+    AUTHORITY_OWNER_ID: project.authority_owner_id ?? '<GENERATED_STABLE_AUTHORITY_OWNER_ID>',
+    AUTHORITY_ADMIN_TOKEN: '<GENERATED_AND_PERSISTED_AUTHORITY_ADMIN_TOKEN>',
+    AUTHORITY_OPERATOR_TOKEN: '<GENERATED_AND_PERSISTED_AUTHORITY_OPERATOR_TOKEN>',
+    AUTHORITY_REVIEWER_TOKEN: '<GENERATED_AND_PERSISTED_AUTHORITY_REVIEWER_TOKEN>',
+    AUTHORITY_PUBLISHER_TOKEN: '<GENERATED_AND_PERSISTED_AUTHORITY_PUBLISHER_TOKEN>',
+    AUTHORITY_VIEWER_TOKEN: '<GENERATED_AND_PERSISTED_AUTHORITY_VIEWER_TOKEN>',
+  }
+  return runtimeDocument.split(/\r?\n/).map((line) => {
+    const index = line.indexOf('=')
+    if (index <= 0) return line
+    const name = line.slice(0, index)
+    return textualValues[name] ? `${name}=${textualValues[name]}` : line
+  }).join('\n').trim()
+}
+
 function buildConsolidatedDoc(project: ProjectRow, runtimeDocument: string): string {
+  const manualEnvDocument = buildManualEnvDocument(project, runtimeDocument)
   const namespace = buildNamespace(project)
   const validationDomain = project.domain ? buildValidationDomain(project) : 'não configurado'
   const tables = tablesByType(project.business_type).join('\n- ')
   const target = project.hosting_target ?? 'não definido'
-  const service = project.service_name ?? project.name.trim().split(/\s+/)[0]?.toLowerCase() ?? 'não definido'
+  const service = project.slug === 'authorityengine' ? 'authority' : (project.service_name ?? project.name.trim().split(/\s+/)[0]?.toLowerCase() ?? 'não definido')
   return [
     `# Documentação para Dev — ${project.name}`,
     '',
@@ -205,10 +229,10 @@ function buildConsolidatedDoc(project: ProjectRow, runtimeDocument: string): str
     '',
     '## 2. Variáveis completas do runtime',
     '',
-    'O bloco abaixo é o contrato operacional completo. Referências `<secret-manager:...>` são placeholders seguros; valores reais devem ser resolvidos no provider autorizado.',
+    'O bloco abaixo usa valores derivados reais quando seguros e marcadores textuais objetivos para credenciais. Substitua os marcadores privados pelos valores do provider autorizado antes do deploy.',
     '',
     '```env',
-    runtimeDocument.trim(),
+    manualEnvDocument,
     '```',
     '',
     '## 3. Procedimento manual no Easypanel',
@@ -275,9 +299,9 @@ export async function GET(
 
   const { data: runtimeContract, error: runtimeContractError } = await supabase
     .from('project_runtime_contracts')
-    .select('document_markdown, environment, contract_version, status, updated_at')
+    .select('document_markdown, env_document, environment, contract_version, status, updated_at')
     .eq('project_id', data.id)
-    .eq('environment', 'development')
+    .eq('environment', 'production')
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -286,7 +310,7 @@ export async function GET(
     return NextResponse.json({ error: 'Runtime contract indisponível; migration 013/readback são obrigatórios.' }, { status: 503 })
   }
   if (runtimeContract) {
-    const markdown = buildConsolidatedDoc(data as ProjectRow, runtimeContract.document_markdown)
+    const markdown = buildConsolidatedDoc(data as ProjectRow, runtimeContract.env_document ?? '')
     return new NextResponse(markdown, {
       headers: {
         'Content-Type': 'text/markdown; charset=utf-8',

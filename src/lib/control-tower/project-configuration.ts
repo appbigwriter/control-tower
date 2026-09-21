@@ -157,7 +157,7 @@ export function buildRuntimeContract(project: RuntimeContractProject, environmen
     project: { id: project.id, name: project.name, slug: project.slug, businessType: project.business_type, templateKey: project.template_key, templateVersion: project.template_version, schemaName: project.schema_name, domain: project.domain, language: project.language, status: project.status },
     environment,
     namespace: buildNamespace(project),
-    serviceName: project.service_name ?? buildServiceName(project),
+    serviceName: project.slug === 'authorityengine' ? 'authority' : (project.service_name ?? buildServiceName(project)),
     envFilename: runtimeEnvFilename(project.slug, environment),
     inventory,
     envDocument: '',
