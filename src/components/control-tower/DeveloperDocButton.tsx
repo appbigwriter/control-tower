@@ -16,9 +16,20 @@ export function DeveloperDocButton({
   const handleClick = async () => {
     setLoading(true)
     try {
+      const contractResponse = await fetch(`/api/control-tower/projects/${slug}/runtime-contract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ environment: 'production', inject: false }),
+      })
+      const contractResult = await contractResponse.json().catch(() => ({}))
+      if (!contractResponse.ok) {
+        throw new Error(contractResult.error ?? 'Falha ao gerar contrato de runtime')
+      }
+
       const response = await fetch(`/api/control-tower/projects/${slug}/developer-doc`)
       if (!response.ok) {
-        throw new Error('Falha ao gerar documentação')
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.error ?? 'Falha ao gerar documentação')
       }
 
       const markdown = await response.text()

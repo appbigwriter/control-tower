@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
+import { buildNamespace, buildValidationDomain } from '@/lib/control-tower/project-configuration'
 
 type ProjectRow = {
   id: string
@@ -14,6 +15,10 @@ type ProjectRow = {
   template_version: string
   language: string
   created_at: string
+  authority_owner_id?: string | null
+  hosting_target?: 'vps1' | 'vps2' | null
+  hosting_project_name?: string | null
+  service_name?: string | null
 }
 
 function tablesByType(projectType: ProjectRow['business_type']) {
@@ -175,6 +180,80 @@ where id = '${project.id}';
 `
 }
 
+function buildConsolidatedDoc(project: ProjectRow, runtimeDocument: string): string {
+  const namespace = buildNamespace(project)
+  const validationDomain = project.domain ? buildValidationDomain(project) : 'não configurado'
+  const tables = tablesByType(project.business_type).join('\n- ')
+  const target = project.hosting_target ?? 'não definido'
+  const service = project.service_name ?? project.name.trim().split(/\s+/)[0]?.toLowerCase() ?? 'não definido'
+  return [
+    `# Documentação para Dev — ${project.name}`,
+    '',
+    '## 1. Identidade do projeto',
+    '',
+    `- **Project ID:** \`${project.id}\``,
+    `- **Slug:** \`${project.slug}\``,
+    `- **Tipo:** \`${project.business_type}\``,
+    `- **Template:** \`${project.template_key}\` (v${project.template_version})`,
+    `- **Schema exclusivo:** \`${project.schema_name}\``,
+    `- **Domínio oficial:** ${project.domain ?? 'não configurado'}`,
+    `- **Domínio de validação:** ${validationDomain}`,
+    `- **Namespace:** \`${namespace}\``,
+    `- **Target:** \`${target}\``,
+    `- **Easypanel project:** \`${project.hosting_project_name ?? 'não definido'}\``,
+    `- **Easypanel service:** \`${service}\``,
+    '',
+    '## 2. Variáveis completas do runtime',
+    '',
+    'O bloco abaixo é o contrato operacional completo. Referências `<secret-manager:...>` são placeholders seguros; valores reais devem ser resolvidos no provider autorizado.',
+    '',
+    '```env',
+    runtimeDocument.trim(),
+    '```',
+    '',
+    '## 3. Procedimento manual no Easypanel',
+    '',
+    '1. Abra o projeto e o serviço informados acima.',
+    '2. Abra **Environment**; o destino padrão do serviço é `.env`.',
+    '3. Informe as variáveis exatamente com os nomes do bloco `env`.',
+    '4. Nunca cole o bloco em Git, chat, ticket ou log.',
+    '5. Salve o Environment e execute **Deploy**.',
+    '6. Verifique o domínio de validação e aguarde HTTP 200.',
+    '',
+    '### Classificação das variáveis',
+    '',
+    '- `AUTHORITY_PROJECT_ID` e `AUTHORITY_OWNER_ID`: identidade derivada do catálogo.',
+    '- `DATABASE_URL`, `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`: conexão/provider Supabase; `DATABASE_URL` precisa ser acessível pelo container do serviço.',
+    '- `AUTHORITY_*_TOKEN`: tokens privados do Authority; nunca expor no frontend.',
+    '- `PORT`, `HOST`, `NODE_ENV` e `APP_ENV`: configuração derivada do runtime.',
+    '',
+    '## 4. Regras de arquitetura',
+    '',
+    `- Operar exclusivamente no schema \`${project.schema_name}\`.`,
+    '- Não criar, alterar ou excluir tabelas de governança no schema `public`.',
+    '- Nunca enviar service role key ou tokens para o browser.',
+    '- Persistir ownership com `project_id` e `owner_id`.',
+    `- Tabelas esperadas no schema:`,
+    `- ${tables}`,
+    '',
+    '## 5. Checklist de validação',
+    '',
+    '- [ ] Migration/runtime contract aplicado.',
+    '- [ ] Variáveis salvas no `.env` do serviço correto.',
+    '- [ ] `DATABASE_URL` não usa `localhost`, `127.0.0.1`, `::1` ou `db` inacessível.',
+    '- [ ] Deploy concluído no serviço correto.',
+    `- [ ] ${validationDomain} retorna HTTP 200.`,
+    '- [ ] Authority executa preflight `select 1`.',
+    '- [ ] Teste de escrita e readback concluído.',
+    '- [ ] Restart/redeploy preserva owner e tokens.',
+    '',
+    '## 6. Segurança',
+    '',
+    'Este documento não deve conter valores secretos reais. Se uma credencial for exposta, revogue-a e gere uma nova antes de continuar.',
+    '',
+  ].join('\n')
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
@@ -185,7 +264,7 @@ export async function GET(
   const { data, error } = await supabase
     .from('projects')
     .select(
-      'id, name, slug, business_type, template_key, schema_name, domain, status, template_version, language, created_at',
+      'id, name, slug, business_type, template_key, schema_name, domain, status, template_version, language, created_at, authority_owner_id, hosting_target, hosting_project_name, service_name',
     )
     .eq('slug', slug)
     .maybeSingle()
@@ -207,7 +286,8 @@ export async function GET(
     return NextResponse.json({ error: 'Runtime contract indisponível; migration 013/readback são obrigatórios.' }, { status: 503 })
   }
   if (runtimeContract) {
-    return new NextResponse(runtimeContract.document_markdown, {
+    const markdown = buildConsolidatedDoc(data as ProjectRow, runtimeContract.document_markdown)
+    return new NextResponse(markdown, {
       headers: {
         'Content-Type': 'text/markdown; charset=utf-8',
         'Content-Disposition': `attachment; filename="${slug}-dev-doc.md"`,

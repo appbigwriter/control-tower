@@ -157,10 +157,25 @@ async function resolveRuntimeEnvironment(
   return resolved
 }
 
+async function probeProjectHealth(project: RuntimeContractProject): Promise<{ status: 'running'; healthUrl: string }> {
+  const domain = project.domain?.trim()
+  if (!domain) throw new Error('runtime_health_domain_missing')
+  const base = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`
+  const healthUrl = new URL('/health', base).toString()
+  let response: Response
+  try {
+    response = await fetch(healthUrl, { signal: AbortSignal.timeout(10000) })
+  } catch {
+    throw new Error(`runtime_health_probe_failed:network:${healthUrl}`)
+  }
+  if (!response.ok) throw new Error(`runtime_health_probe_failed:http_${response.status}:${healthUrl}`)
+  return { status: 'running', healthUrl }
+}
+
 async function injectRuntimeEnvironment(
   project: RuntimeContractProject,
   contract: ReturnType<typeof buildRuntimeContract>,
-): Promise<{ target: string; projectName: string; serviceName: string; status: string; sourceService: string }> {
+): Promise<{ target: string; projectName: string; serviceName: string; status: string; healthUrl: string; sourceService: string }> {
   const target = project.hosting_target
   if (target !== 'vps1' && target !== 'vps2') throw new Error('hosting_target_required_for_runtime_injection')
   const envNames = easypanelTargetEnv(target)
@@ -188,9 +203,15 @@ async function injectRuntimeEnvironment(
     throw new Error(`runtime_target_mutation_failed:${projectName}/${contract.serviceName}:${error instanceof Error ? error.message : 'mutation_failed'}`)
   }
   const readback = await provider.inspectAppService(projectName, contract.serviceName)
-  const status = typeof (readback as { status?: unknown })?.status === 'string' ? (readback as { status: string }).status : 'NOT_VERIFIED'
-  if (status !== 'running' && status !== 'deploying') throw new Error(`runtime_deploy_readback_not_healthy:${status}`)
-  return { target, projectName, serviceName: contract.serviceName, status, sourceService: `${SUPABASE_RUNTIME_PROJECT}/${(await readSupabaseRuntimeEnv(provider)).serviceName}` }
+  const configured = (readback as { enabled?: unknown })?.enabled === true
+  if (!configured) throw new Error('runtime_deploy_readback_not_configured')
+  let health: { status: 'running'; healthUrl: string }
+  try {
+    health = await probeProjectHealth(project)
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'runtime_health_probe_failed')
+  }
+  return { target, projectName, serviceName: contract.serviceName, status: health.status, healthUrl: health.healthUrl, sourceService: `${SUPABASE_RUNTIME_PROJECT}/${(await readSupabaseRuntimeEnv(provider)).serviceName}` }
 }
 
 export async function POST(
