@@ -12,6 +12,7 @@ import {
   runtimeEnvFilename,
   assertRuntimeProjectIdentity,
 } from '../src/lib/control-tower/project-configuration.ts'
+import { HOSTING_PROJECT_OPTIONS, validateHostingProject } from '../src/lib/control-tower/hosting-targets.ts'
 
 const project = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -19,6 +20,18 @@ const project = {
   schema_name: 'blog_example',
   domain: 'example.com',
 }
+
+test('hosting options expose the three approved Easypanel project/target pairs', () => {
+  assert.deepEqual(HOSTING_PROJECT_OPTIONS.map(({ projectName, target }) => [projectName, target]), [
+    ['sistemas', 'vps2'],
+    ['blogs', 'vps2'],
+    ['projetos', 'vps1'],
+  ])
+  assert.equal(validateHostingProject('sistemas', 'vps2'), true)
+  assert.equal(validateHostingProject('blogs', 'vps2'), true)
+  assert.equal(validateHostingProject('projetos', 'vps1'), true)
+  assert.equal(validateHostingProject('blogs', 'vps1'), false)
+})
 
 test('gera variáveis de runtime completas com referências seguras', () => {
   const variables = buildPublicVariables(project)

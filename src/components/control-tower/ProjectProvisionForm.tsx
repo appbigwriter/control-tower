@@ -2,6 +2,7 @@
 
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
+import { HOSTING_PROJECT_OPTIONS, type HostingProjectName, type HostingTarget } from '@/lib/control-tower/hosting-targets'
 
 type BusinessType = 'blog' | 'store' | 'saas' | 'custom'
 type TemplateKey = 'blog_standard' | 'store_standard' | 'saas_standard' | 'custom_base'
@@ -20,7 +21,8 @@ export function ProjectProvisionForm() {
   const [templateKey, setTemplateKey] = useState<TemplateKey>('blog_standard')
   const [domain, setDomain] = useState('')
   const [repositoryUrl, setRepositoryUrl] = useState('')
-  const [hostingTarget, setHostingTarget] = useState<'vps1' | 'vps2'>('vps1')
+  const [hostingTarget, setHostingTarget] = useState<HostingTarget>('vps1')
+  const [hostingProjectName, setHostingProjectName] = useState<HostingProjectName>('projetos')
   const [language, setLanguage] = useState<'pt' | 'en' | 'es'>('pt')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState<string | null>(null)
@@ -55,6 +57,7 @@ export function ProjectProvisionForm() {
           domain,
           repository_url: repositoryUrl,
           hosting_target: hostingTarget,
+          hosting_project_name: hostingProjectName,
           language,
         }),
       })
@@ -153,15 +156,19 @@ export function ProjectProvisionForm() {
       </label>
 
       <label className="grid gap-2">
-        <span className="text-xs uppercase tracking-[0.22em] text-neutral-400">Hosting target</span>
+        <span className="text-xs uppercase tracking-[0.22em] text-neutral-400">Projeto Easypanel / target</span>
         <select
           className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/40"
-          value={hostingTarget}
-          onChange={(event) => setHostingTarget(event.target.value as 'vps1' | 'vps2')}
+          value={hostingProjectName}
+          onChange={(event) => {
+            const option = HOSTING_PROJECT_OPTIONS.find((item) => item.projectName === event.target.value)
+            if (!option) return
+            setHostingProjectName(option.projectName)
+            setHostingTarget(option.target)
+          }}
           required
         >
-          <option value="vps1">VPS1 — projetos</option>
-          <option value="vps2">VPS2 — sistemas</option>
+          {HOSTING_PROJECT_OPTIONS.map((option) => <option key={option.projectName} value={option.projectName}>{option.label}</option>)}
         </select>
       </label>
       <label className="grid gap-2">
@@ -201,6 +208,7 @@ export function ProjectProvisionForm() {
             setDomain('')
             setRepositoryUrl('')
             setHostingTarget('vps1')
+            setHostingProjectName('projetos')
             setLanguage('pt')
             setStatus('idle')
             setMessage(null)

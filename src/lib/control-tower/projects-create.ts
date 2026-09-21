@@ -15,8 +15,10 @@ import {
   sanitizeError,
   validateBusinessTypeTemplatePair,
   deriveHostingTarget,
+  validateHostingProject,
   type HttpResult,
   type HostingTarget,
+  type HostingProjectName,
   type SupabaseLike,
 } from '@/lib/control-tower/provisioning'
 
@@ -28,12 +30,13 @@ export type CreateProjectInput = {
   domain: string
   repository_url: string
   hosting_target: HostingTarget
+  hosting_project_name: HostingProjectName
   language: string
   organization_slug: string
 }
 
 function runtimeMetadata(input: CreateProjectInput) {
-  const target = deriveHostingTarget(input.hosting_target, input.name)
+  const target = deriveHostingTarget(input.hosting_target, input.name, input.hosting_project_name)
   return {
     repository_url: input.repository_url,
     hosting_target: target.target,
@@ -76,6 +79,12 @@ export function parseCreateProjectBody(body: unknown): { ok: true; input: Create
   if (raw.hosting_target !== 'vps1' && raw.hosting_target !== 'vps2') {
     return { ok: false, error: 'Payload invalido: hosting_target deve ser vps1 ou vps2' }
   }
+  if (raw.hosting_project_name !== 'sistemas' && raw.hosting_project_name !== 'blogs' && raw.hosting_project_name !== 'projetos') {
+    return { ok: false, error: 'Payload invalido: hosting_project_name deve ser sistemas, blogs ou projetos' }
+  }
+  if (!validateHostingProject(raw.hosting_project_name, raw.hosting_target)) {
+    return { ok: false, error: 'Payload invalido: hosting_project_name nao corresponde ao hosting_target' }
+  }
 
   const language = raw.language === undefined ? 'pt' : raw.language
   if (typeof language !== 'string' || !['pt', 'en', 'es'].includes(language)) {
@@ -97,6 +106,7 @@ export function parseCreateProjectBody(body: unknown): { ok: true; input: Create
       domain: raw.domain.trim(),
       repository_url: raw.repository_url.trim(),
       hosting_target: raw.hosting_target,
+      hosting_project_name: raw.hosting_project_name,
       language,
       organization_slug: organizationSlug,
     },

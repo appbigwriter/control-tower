@@ -17,14 +17,22 @@ export const TEMPLATE_KEYS = ['blog_standard', 'store_standard', 'saas_standard'
 
 export type BusinessType = (typeof BUSINESS_TYPES)[number]
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number]
-export type HostingTarget = 'vps1' | 'vps2'
+export type HostingTarget = import('./hosting-targets').HostingTarget
+export type HostingProjectName = import('./hosting-targets').HostingProjectName
+import { HOSTING_PROJECT_OPTIONS, validateHostingProject } from './hosting-targets'
 
-export function deriveHostingTarget(target: HostingTarget, projectName: string) {
-  const serviceName = projectName.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z0-9-]/g, '') ?? ''
+export { HOSTING_PROJECT_OPTIONS, validateHostingProject }
+
+export function deriveHostingTarget(target: HostingTarget, serviceNameInput: string, hostingProjectName?: HostingProjectName) {
+  const serviceName = serviceNameInput.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z0-9-]/g, '') ?? ''
   if (!serviceName) throw new Error('projectName não produz serviceName válido')
+  const option = hostingProjectName
+    ? HOSTING_PROJECT_OPTIONS.find((candidate) => candidate.projectName === hostingProjectName && candidate.target === target)
+    : undefined
+  if (hostingProjectName && !option) throw new Error('hosting_project_name não corresponde ao hosting_target')
   return {
     target,
-    projectName: target === 'vps1' ? 'projetos' : 'sistemas',
+    projectName: option?.projectName ?? (target === 'vps1' ? 'projetos' : 'sistemas'),
     serviceName,
   }
 }
