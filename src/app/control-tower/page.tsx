@@ -363,6 +363,7 @@ export default async function ControlTowerPage() {
                         schemaName={project.schema_name}
                         hostingProjectName={project.hosting_project_name}
                         repositoryPath={project.repository_path}
+                        serviceName={project.service_name}
                         language="pt"
                         domain={project.domain}
                         repositoryUrl={project.repository_url}

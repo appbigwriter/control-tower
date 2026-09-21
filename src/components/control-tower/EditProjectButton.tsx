@@ -12,6 +12,7 @@ export function EditProjectButton({
   schemaName,
   hostingProjectName,
   repositoryPath,
+  serviceName,
   language,
   domain,
   repositoryUrl,
@@ -24,6 +25,7 @@ export function EditProjectButton({
   schemaName: string
   hostingProjectName: string | null
   repositoryPath: string | null
+  serviceName: string | null
   language: string
   domain: string | null
   repositoryUrl: string | null
@@ -41,6 +43,7 @@ export function EditProjectButton({
   const [draftDomain, setDraftDomain] = useState(domain ?? '')
   const [draftRepositoryUrl, setDraftRepositoryUrl] = useState(repositoryUrl ?? '')
   const [draftRepositoryPath, setDraftRepositoryPath] = useState(repositoryPath ?? '/09-codigo')
+  const [draftServiceName, setDraftServiceName] = useState(serviceName ?? '')
   const [draftHostingTarget, setDraftHostingTarget] = useState<HostingTarget>(hostingTarget ?? 'vps1')
   const [draftHostingProjectName, setDraftHostingProjectName] = useState<HostingProjectName>((hostingProjectName as HostingProjectName) ?? 'projetos')
   const [draftLanguage, setDraftLanguage] = useState(language || 'pt')
@@ -61,6 +64,7 @@ export function EditProjectButton({
           domain: draftDomain,
           repository_url: draftRepositoryUrl,
           repository_path: draftRepositoryPath,
+          service_name: draftServiceName,
           hosting_target: draftHostingTarget,
           hosting_project_name: draftHostingProjectName,
           language: draftLanguage,
@@ -110,7 +114,7 @@ export function EditProjectButton({
             <label className="grid min-w-0 gap-1 text-xs text-neutral-400">Template<input value={draftTemplateKey} onChange={(event) => setDraftTemplateKey(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" required /></label>
             <label className="grid min-w-0 gap-1 text-xs text-neutral-400">Schema<input value={draftSchemaName} onChange={(event) => setDraftSchemaName(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" required /></label>
             <label className="grid min-w-0 gap-1 text-xs text-neutral-400">Idioma<select value={draftLanguage} onChange={(event) => setDraftLanguage(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"><option value="pt">pt</option><option value="en">en</option><option value="es">es</option></select></label>
-
+            <label className="grid min-w-0 gap-1 text-xs text-neutral-400">Service name<input value={draftServiceName} onChange={(event) => setDraftServiceName(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" required /></label>
             <label className="grid min-w-0 gap-1 text-xs text-neutral-400">
               Domínio
               <input value={draftDomain} onChange={(event) => setDraftDomain(event.target.value)} className="w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" required />

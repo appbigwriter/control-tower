@@ -56,11 +56,13 @@ export async function PATCH(
       if (conflict && conflict.id !== project.id) return NextResponse.json({ error: 'slug já utilizado por outro projeto' }, { status: 409 })
     }
     const target = deriveHostingTarget(hostingTarget as HostingTarget, name, hostingProjectName as HostingProjectName)
+    const serviceName = typeof body.service_name === 'string' ? body.service_name.trim() : target.serviceName
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(serviceName)) return NextResponse.json({ error: 'service_name inválido' }, { status: 400 })
     const metadata = {
       name, slug: nextSlug, domain, repository_url: repositoryUrl, repository_path: repositoryPath,
       business_type: pair.businessType, template_key: pair.templateKey, schema_name: schemaName,
       language, hosting_target: target.target, hosting_project_name: target.projectName,
-      service_name: target.serviceName, updated_at: new Date().toISOString(),
+      service_name: serviceName, updated_at: new Date().toISOString(),
     }
 
     const { data, error } = await client
