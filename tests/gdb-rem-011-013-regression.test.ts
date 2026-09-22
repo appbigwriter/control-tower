@@ -216,6 +216,7 @@ test('delete: falha no drop deixa estado blocked explícito, sem catálogo fanta
   assert.equal(result.blocked, true)
   assert.equal(result.httpStatus, 409)
   assert.ok(state.projects.has(project.slug), 'catálogo PRESERVADO (não fantasma)')
+  assert.equal(state.projects.get(project.slug)?.status, 'blocked', 'falha destrutiva deve usar estado permitido pela constraint')
   assert.ok(state.schemas.has(project.schema_name), 'schema preservado')
   assert.ok(state.auditLogs.some((a) => a.action === 'project.delete_requested'))
 })
@@ -256,9 +257,9 @@ test('rebuild: RPC que retorna { error } marca job error e projeto error (nunca 
   assert.ok(!result.ok)
   const job = state.provisioningJobs.find((j) => j.project_id === project.id && j.job_type === 'rebuild_schema')
   assert.ok(job)
-  assert.equal(job.status, 'error')
+  assert.equal(job.status, 'failed')
   assert.ok(state.auditLogs.some((a) => a.action === 'project.rebuild_failed'))
-  assert.equal(state.projects.get(project.slug)?.status, 'error')
+  assert.equal(state.projects.get(project.slug)?.status, 'failed')
 })
 
 test('rebuild: sucesso exige readback de existência do schema antes de active/success', async () => {
@@ -302,7 +303,7 @@ test('rebuild: readback mostra schema inexistente → falha (nunca success falso
   assert.ok(!result.ok)
   assert.equal(result.sagaReceipt.failedStep, 'readback_schema_exists')
   const job = state.provisioningJobs.find((j) => j.project_id === project.id && j.job_type === 'rebuild_schema')
-  assert.equal(job?.status, 'error')
+  assert.equal(job?.status, 'failed')
 })
 
 // ---------------------------------------------------------------------------

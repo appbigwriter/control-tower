@@ -167,7 +167,10 @@ export async function deleteProject(
     {
       name: 'mark_project_deleting',
       execute: async () => {
-        const { error } = await client.from('projects').update({ status: 'error' }).eq('id', project.id)
+        // `projects_status_check` does not accept `error`; `blocked` is the
+        // canonical persisted state for a destructive saga that stopped before
+        // catalog removal and requires reconciliation.
+        const { error } = await client.from('projects').update({ status: 'blocked' }).eq('id', project.id)
         if (error) throw new Error(`status update failed: ${error.message}`)
         return null
       },
@@ -352,16 +355,16 @@ export async function rebuildProjectSchema(
   ])
 
   if (!sagaSucceeded(receipt)) {
-    // Job MUST be marked error; project marked error; sanitized audit persisted.
+    // Job/project failure states must match the canonical constraints.
     await client
       .from('provisioning_jobs')
       .update({
-        status: 'error',
+        status: 'failed',
         error_message: receipt.error ?? 'rebuild failed',
         finished_at: new Date().toISOString(),
       })
       .eq('id', jobId)
-    await client.from('projects').update({ status: 'error' }).eq('id', project.id)
+    await client.from('projects').update({ status: 'failed' }).eq('id', project.id)
     await client.from('audit_logs').insert({
       project_id: project.id,
       action: 'project.rebuild_failed',
