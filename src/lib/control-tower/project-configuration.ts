@@ -12,6 +12,10 @@ export type ArtifactType = 'public_variables' | 'namespace' | 'validation_domain
 export function buildPublicVariables(project: ProjectConfigurationProject) {
   const namespace = `${buildNamespace(project)}/development`
   const ref = (name: string) => `<secret-manager:${namespace}/${name}>`
+  const isAuthority = project.schema_name === 'custom_authorityengine'
+  if (isAuthority && !project.authority_owner_id?.trim()) {
+    throw new Error('authority_owner_id_required_before_runtime_contract')
+  }
   return {
     PORT: '3400',
     HOST: '0.0.0.0',
@@ -20,8 +24,7 @@ export function buildPublicVariables(project: ProjectConfigurationProject) {
     CONTROL_TOWER_BASE_URL: 'https://control-tower.fbr.news',
     CONTROL_TOWER_PROJECT_ID: project.id,
     CONTROL_TOWER_SCHEMA_NAME: project.schema_name,
-    AUTHORITY_PROJECT_ID: project.id,
-    AUTHORITY_OWNER_ID: project.authority_owner_id ?? ref('AUTHORITY_OWNER_ID'),
+    ...(isAuthority ? { AUTHORITY_PROJECT_ID: project.id, AUTHORITY_OWNER_ID: project.authority_owner_id!, AUTHORITY_TENANT_ID: 'fbr-agency', AUTHORITY_TENANT_NAME: 'FBR Agency' } : {}),
     SUPABASE_URL: ref('SUPABASE_URL'),
     DATABASE_URL: ref('DATABASE_URL'),
     SUPABASE_SERVICE_ROLE_KEY: ref('SUPABASE_SERVICE_ROLE_KEY'),
@@ -122,7 +125,12 @@ export function buildRuntimeInventory(project: RuntimeContractProject, environme
     { name: 'CONTROL_TOWER_BASE_URL', kind: 'public', required: true, source: 'derived', value: 'https://control-tower.fbr.news', consumer: 'server', validation: 'valid https URL' },
     { name: 'CONTROL_TOWER_PROJECT_ID', kind: 'public', required: true, source: 'derived', value: project.id, consumer: 'server', validation: 'equals catalog project_id' },
     { name: 'CONTROL_TOWER_SCHEMA_NAME', kind: 'public', required: true, source: 'derived', value: project.schema_name, consumer: 'server', validation: 'equals catalog schema_name' },
-    ...(profile === 'authority' ? [{ name: 'AUTHORITY_PROJECT_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: project.id, consumer: 'server' as const, validation: 'equals catalog project_id' }, { name: 'AUTHORITY_OWNER_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: project.authority_owner_id ?? undefined, consumer: 'server' as const, validation: 'stable UUID persisted in catalog' }] : []),
+    ...(profile === 'authority' ? [
+      { name: 'AUTHORITY_PROJECT_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: project.id, consumer: 'server' as const, validation: 'equals catalog project_id' },
+      { name: 'AUTHORITY_OWNER_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: project.authority_owner_id ?? undefined, consumer: 'server' as const, validation: 'stable UUID persisted in catalog' },
+      { name: 'AUTHORITY_TENANT_ID', kind: 'public' as const, required: true, source: 'derived' as const, value: 'fbr-agency', consumer: 'server' as const, validation: 'equals FBR Agency tenant' },
+      { name: 'AUTHORITY_TENANT_NAME', kind: 'public' as const, required: true, source: 'derived' as const, value: 'FBR Agency', consumer: 'server' as const, validation: 'equals FBR Agency' },
+    ] : []),
   ]
   const secrets: RuntimeVariable[] = secretNames.map((name) => ({
     name,

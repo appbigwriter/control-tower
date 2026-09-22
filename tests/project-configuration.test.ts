@@ -40,8 +40,8 @@ test('gera variáveis de runtime completas com referências seguras', () => {
   assert.equal(variables.CONTROL_TOWER_SCHEMA_NAME, project.schema_name)
   assert.match(variables.DATABASE_URL, /^<secret-manager:/)
   assert.match(variables.SUPABASE_SERVICE_ROLE_KEY, /^<secret-manager:/)
-  assert.equal(variables.AUTHORITY_PROJECT_ID, project.id)
-  assert.match(variables.AUTHORITY_OWNER_ID, /^<secret-manager:/)
+  assert.equal(variables.AUTHORITY_PROJECT_ID, undefined)
+  assert.equal(variables.AUTHORITY_OWNER_ID, undefined)
 })
 
 test('gera namespace com plural para blog e id do projeto', () => {
