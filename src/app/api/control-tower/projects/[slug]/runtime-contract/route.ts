@@ -77,27 +77,68 @@ function serviceRefsInCatalog(readback: unknown): ServiceRef[] {
   return [...own, ...Object.values(record).flatMap((value) => serviceRefsInCatalog(value))]
 }
 
-async function readSupabaseRuntimeEnv(provider: EasypanelSecretsProvider): Promise<{ projectName: string; serviceName: string; env: Record<string, string> }> {
-  const catalog = await provider.listProjectsAndServices()
-  const discovered = serviceRefsInCatalog(catalog)
-  const preferred = discovered.filter(({ projectName, serviceName }) =>
-    projectName === SUPABASE_RUNTIME_PROJECT || /supabase|gestaodb|database|postgres|^db$|^base$/i.test(`${projectName}/${serviceName}`),
-  )
-  const defaults = SUPABASE_SERVICE_CANDIDATES.flatMap((serviceName) => [
-    { projectName: SUPABASE_RUNTIME_PROJECT, serviceName },
-  ])
-  const candidates = [...new Map([...preferred, ...defaults].map((item) => [`${item.projectName}/${item.serviceName}`, item])).values()]
-  for (const candidate of candidates) {
+async function readSupabaseRuntimeEnv(provider?: EasypanelSecretsProvider): Promise<{ projectName: string; serviceName: string; env: Record<string, string> }> {
+  const providersToCheck: EasypanelSecretsProvider[] = []
+  if (provider) providersToCheck.push(provider)
+  try {
+    const vps2Provider = new EasypanelSecretsProvider('vps2')
+    if (provider !== vps2Provider) providersToCheck.push(vps2Provider)
+  } catch {
+    // VPS2 provider credentials might not be configured in this environment
+  }
+
+  const attemptedCandidates: string[] = []
+
+  for (const currentProvider of providersToCheck) {
     try {
-      const readback = await provider.inspectComposeService?.(candidate.projectName, candidate.serviceName)
-      if (!readback) continue
-      const env = parseServiceEnv(readback)
-      if (env.DATABASE_URL || env.POSTGRES_HOST || env.SUPABASE_URL) return { ...candidate, env }
+      const catalog = await currentProvider.listProjectsAndServices()
+      const discovered = serviceRefsInCatalog(catalog)
+      const preferred = discovered.filter(({ projectName, serviceName }) =>
+        projectName === SUPABASE_RUNTIME_PROJECT || /supabase|gestaodb|database|postgres|^db$|^base$/i.test(`${projectName}/${serviceName}`),
+      )
+      const defaults = SUPABASE_SERVICE_CANDIDATES.flatMap((serviceName) => [
+        { projectName: SUPABASE_RUNTIME_PROJECT, serviceName },
+      ])
+      const candidates = [...new Map([...preferred, ...defaults].map((item) => [`${item.projectName}/${item.serviceName}`, item])).values()]
+      for (const candidate of candidates) {
+        attemptedCandidates.push(`${candidate.projectName}/${candidate.serviceName}`)
+        try {
+          let readback = await currentProvider.inspectComposeService?.(candidate.projectName, candidate.serviceName)
+          if (!readback) {
+            readback = await currentProvider.inspectAppService?.(candidate.projectName, candidate.serviceName)
+          }
+          if (!readback) continue
+          const env = parseServiceEnv(readback)
+          if (env.DATABASE_URL || env.POSTGRES_HOST || env.SUPABASE_URL || env.SUPABASE_SERVICE_ROLE_KEY || env.POSTGRES_PASSWORD) {
+            return { ...candidate, env }
+          }
+        } catch {
+          // Candidate does not exist or is not inspectable; continue without exposing values.
+        }
+      }
     } catch {
-      // Candidate does not exist or is not inspectable; continue without exposing values.
+      // Provider not reachable or unauthorized
     }
   }
-  throw new Error(`runtime_secret_source_service_not_found:candidates=${candidates.map((item) => `${item.projectName}/${item.serviceName}`).join(',')}`)
+
+  // Fallback: usar variáveis configuradas no próprio ambiente de runtime do Control Tower
+  const processEnvHasSupabase = Boolean(
+    process.env.DATABASE_URL ||
+    process.env.SUPABASE_URL ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.POSTGRES_PASSWORD
+  )
+
+  if (processEnvHasSupabase) {
+    const env: Record<string, string> = {}
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value) env[key] = value
+    }
+    return { projectName: 'control-tower', serviceName: 'runtime-env', env }
+  }
+
+  const uniqueCandidates = [...new Set(attemptedCandidates)]
+  throw new Error(`runtime_secret_source_service_not_found:candidates=${uniqueCandidates.length > 0 ? uniqueCandidates.join(',') : 'supabase/supabase-gestaodb,supabase/base,supabase/db,supabase/postgres,supabase/supabase-db'}`)
 }
 
 function assertReachableDatabaseUrl(value: string): void {
@@ -118,7 +159,7 @@ async function resolveRuntimeEnvironment(
   target: EasypanelTarget,
   provider: EasypanelSecretsProvider,
   destination: { projectName: string; serviceName: string },
-): Promise<Record<string, string>> {
+): Promise<{ resolved: Record<string, string>; source: { projectName: string; serviceName: string } }> {
   const source = await readSupabaseRuntimeEnv(provider)
   const sourceEnv = source.env
   const destinationReadback = await provider.inspectAppService(destination.projectName, destination.serviceName)
@@ -158,7 +199,7 @@ async function resolveRuntimeEnvironment(
     if (value === undefined || value === '') {
       if (variable.required) {
         const diagnosticSource = variable.source === 'provider'
-          ? `provider=${SUPABASE_RUNTIME_PROJECT}/${source.serviceName}`
+          ? `provider=${source.projectName}/${source.serviceName}`
           : `secret_manager=${variable.reference_path ?? variable.name}`
         throw new Error(`runtime_variable_missing:${variable.name}:source=${diagnosticSource}`)
       }
@@ -167,7 +208,7 @@ async function resolveRuntimeEnvironment(
     if (variable.name === 'DATABASE_URL' && value) assertReachableDatabaseUrl(value)
     resolved[variable.name] = value
   }
-  return resolved
+  return { resolved, source }
 }
 
 async function probeProjectHealth(project: RuntimeContractProject): Promise<{ status: 'running'; healthUrl: string }> {
@@ -208,7 +249,7 @@ async function injectRuntimeEnvironment(
   } catch (error) {
     throw new Error(`runtime_target_service_unavailable:${projectName}/${contract.serviceName}:${error instanceof Error ? error.message : 'service_check_failed'}`)
   }
-  const values = await resolveRuntimeEnvironment(contract, target, provider, { projectName, serviceName: contract.serviceName })
+  const { resolved: values, source } = await resolveRuntimeEnvironment(contract, target, provider, { projectName, serviceName: contract.serviceName })
   try {
     await provider.updateEnv(projectName, contract.serviceName, values)
     await provider.deploy(projectName, contract.serviceName)
@@ -224,7 +265,7 @@ async function injectRuntimeEnvironment(
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'runtime_health_probe_failed')
   }
-  return { target, projectName, serviceName: contract.serviceName, status: health.status, healthUrl: health.healthUrl, sourceService: `${SUPABASE_RUNTIME_PROJECT}/${(await readSupabaseRuntimeEnv(provider)).serviceName}` }
+  return { target, projectName, serviceName: contract.serviceName, status: health.status, healthUrl: health.healthUrl, sourceService: `${source.projectName}/${source.serviceName}` }
 }
 
 export async function POST(
