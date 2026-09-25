@@ -271,10 +271,18 @@ async function injectRuntimeEnvironment(
   try {
     services = await provider.listProjectsAndServices()
     if (!readbackHasService(services, projectName, contract.serviceName)) {
-      await provider.createAppService(projectName, contract.serviceName)
+      try {
+        await provider.createAppService(projectName, contract.serviceName)
+      } catch (err) {
+        const inspectExisting = await provider.inspectAppService(projectName, contract.serviceName).catch(() => null)
+        if (!inspectExisting) throw err
+      }
       services = await provider.listProjectsAndServices()
       if (!readbackHasService(services, projectName, contract.serviceName)) {
-        throw new Error(`runtime_target_service_readback_missing:${projectName}/${contract.serviceName}`)
+        const directInspect = await provider.inspectAppService(projectName, contract.serviceName).catch(() => null)
+        if (!directInspect) {
+          throw new Error(`runtime_target_service_readback_missing:${projectName}/${contract.serviceName}`)
+        }
       }
     }
   } catch (error) {

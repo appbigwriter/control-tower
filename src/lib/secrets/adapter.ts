@@ -98,14 +98,14 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function serviceNameOf(value: unknown): string | undefined {
   const record = asRecord(value)
   if (!record) return undefined
-  const candidate = record.name ?? record.serviceName
+  const candidate = record.serviceName ?? record.name
   return typeof candidate === 'string' ? candidate : undefined
 }
 
 function projectNameOf(value: unknown): string | undefined {
   const record = asRecord(value)
   if (!record) return undefined
-  const candidate = record.name ?? record.projectName
+  const candidate = record.projectName ?? record.name
   return typeof candidate === 'string' ? candidate : undefined
 }
 
@@ -120,23 +120,39 @@ function serviceExistsInProject(project: unknown, serviceName: string): boolean 
 }
 
 export function readbackHasService(readback: unknown, projectName: string, serviceName: string): boolean {
+  if (!readback) return false
+
   if (Array.isArray(readback)) {
-    return readback.some((item) => {
-      if (projectNameOf(item) === projectName && serviceNameOf(item) === serviceName) return true
-      return projectNameOf(item) === projectName && serviceExistsInProject(item, serviceName)
-    })
+    return readback.some((item) => readbackHasService(item, projectName, serviceName))
   }
+
   const record = asRecord(readback)
   if (!record) return false
-  if (projectNameOf(record) === projectName && serviceNameOf(record) === serviceName) return true
-  if (projectNameOf(record) === projectName && serviceExistsInProject(record, serviceName)) return true
-  if (Array.isArray(record.services)) {
-    const hasMatch = record.services.some((service) => {
-      const spName = projectNameOf(service) ?? projectNameOf(record)
-      return spName === projectName && serviceNameOf(service) === serviceName
-    })
-    if (hasMatch) return true
+
+  const itemProject = typeof record.projectName === 'string' ? record.projectName : undefined
+  const itemName = typeof record.serviceName === 'string' ? record.serviceName : typeof record.name === 'string' ? record.name : undefined
+  if (itemProject === projectName && itemName === serviceName) {
+    return true
   }
+
+  if (Array.isArray(record.services)) {
+    const parentProject = typeof record.name === 'string' ? record.name : typeof record.projectName === 'string' ? record.projectName : undefined
+    const match = record.services.some((s) => {
+      if (!s || typeof s !== 'object') return false
+      const sRecord = s as Record<string, unknown>
+      const spName = typeof sRecord.projectName === 'string' ? sRecord.projectName : parentProject
+      const ssName = typeof sRecord.serviceName === 'string' ? sRecord.serviceName : typeof sRecord.name === 'string' ? sRecord.name : undefined
+      return spName === projectName && ssName === serviceName
+    })
+    if (match) return true
+  }
+
+  if (Array.isArray(record.projects)) {
+    if (record.projects.some((p) => readbackHasService(p, projectName, serviceName))) {
+      return true
+    }
+  }
+
   return Object.values(record).some((value) => typeof value === 'object' && value !== null && readbackHasService(value, projectName, serviceName))
 }
 
