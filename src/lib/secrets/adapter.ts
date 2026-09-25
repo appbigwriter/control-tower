@@ -121,13 +121,23 @@ function serviceExistsInProject(project: unknown, serviceName: string): boolean 
 
 export function readbackHasService(readback: unknown, projectName: string, serviceName: string): boolean {
   if (Array.isArray(readback)) {
-    return readback.some((project) => projectNameOf(project) === projectName && serviceExistsInProject(project, serviceName))
+    return readback.some((item) => {
+      if (projectNameOf(item) === projectName && serviceNameOf(item) === serviceName) return true
+      return projectNameOf(item) === projectName && serviceExistsInProject(item, serviceName)
+    })
   }
   const record = asRecord(readback)
   if (!record) return false
+  if (projectNameOf(record) === projectName && serviceNameOf(record) === serviceName) return true
   if (projectNameOf(record) === projectName && serviceExistsInProject(record, serviceName)) return true
-  if (Array.isArray(record.services) && record.services.some((service) => serviceNameOf(service) === serviceName)) return true
-  return Object.values(record).some((value) => readbackHasService(value, projectName, serviceName))
+  if (Array.isArray(record.services)) {
+    const hasMatch = record.services.some((service) => {
+      const spName = projectNameOf(service) ?? projectNameOf(record)
+      return spName === projectName && serviceNameOf(service) === serviceName
+    })
+    if (hasMatch) return true
+  }
+  return Object.values(record).some((value) => typeof value === 'object' && value !== null && readbackHasService(value, projectName, serviceName))
 }
 
 export function parseServiceEnv(readback: unknown): Record<string, string> {
