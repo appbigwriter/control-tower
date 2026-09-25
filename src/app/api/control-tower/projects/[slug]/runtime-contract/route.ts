@@ -66,18 +66,45 @@ function serviceRefsInCatalog(readback: unknown): ServiceRef[] {
   if (Array.isArray(readback)) return readback.flatMap(serviceRefsInCatalog)
   if (!readback || typeof readback !== 'object') return []
   const record = readback as Record<string, unknown>
-  const projectName = typeof record.name === 'string' ? record.name : typeof record.projectName === 'string' ? record.projectName : undefined
-  const services = Array.isArray(record.services) ? record.services : []
-  const own = projectName ? services.flatMap((service) => {
-    if (!service || typeof service !== 'object') return []
-    const serviceRecord = service as Record<string, unknown>
-    const serviceName = serviceRecord.name ?? serviceRecord.serviceName
-    return typeof serviceName === 'string' ? [{ projectName, serviceName }] : []
-  }) : []
-  return [...own, ...Object.values(record).flatMap((value) => serviceRefsInCatalog(value))]
+  const results: ServiceRef[] = []
+
+  if (Array.isArray(record.services)) {
+    for (const s of record.services) {
+      if (s && typeof s === 'object') {
+        const sr = s as Record<string, unknown>
+        const projectName = typeof sr.projectName === 'string' ? sr.projectName : typeof record.name === 'string' ? record.name : undefined
+        const serviceName = typeof sr.name === 'string' ? sr.name : typeof sr.serviceName === 'string' ? sr.serviceName : undefined
+        if (projectName && serviceName) {
+          results.push({ projectName, serviceName })
+        }
+      }
+    }
+  }
+
+  if (typeof record.projectName === 'string' && typeof record.name === 'string') {
+    results.push({ projectName: record.projectName, serviceName: record.name })
+  }
+
+  return results
 }
 
 async function readSupabaseRuntimeEnv(provider?: EasypanelSecretsProvider): Promise<{ projectName: string; serviceName: string; env: Record<string, string> }> {
+  // 1. Verificar primeiro as variáveis configuradas no próprio ambiente de runtime do Control Tower
+  const processEnvHasSupabase = Boolean(
+    process.env.DATABASE_URL ||
+    process.env.SUPABASE_URL ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.POSTGRES_PASSWORD
+  )
+
+  if (processEnvHasSupabase) {
+    const env: Record<string, string> = {}
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value) env[key] = value
+    }
+    return { projectName: 'control-tower', serviceName: 'runtime-env', env }
+  }
+
   const providersToCheck: EasypanelSecretsProvider[] = []
   if (provider) providersToCheck.push(provider)
   try {
@@ -92,6 +119,26 @@ async function readSupabaseRuntimeEnv(provider?: EasypanelSecretsProvider): Prom
   for (const currentProvider of providersToCheck) {
     try {
       const catalog = await currentProvider.listProjectsAndServices()
+      
+      // Checar se algum serviço retornado na listagem já traz env inline
+      if (catalog && typeof catalog === 'object') {
+        const catRecord = catalog as Record<string, unknown>
+        if (Array.isArray(catRecord.services)) {
+          for (const s of catRecord.services) {
+            if (s && typeof s === 'object') {
+              const env = parseServiceEnv(s)
+              const projectName = (s as Record<string, unknown>).projectName as string
+              const serviceName = (s as Record<string, unknown>).name as string
+              if (projectName && serviceName && (env.DATABASE_URL || env.POSTGRES_HOST || env.SUPABASE_URL || env.SUPABASE_SERVICE_ROLE_KEY || env.POSTGRES_PASSWORD)) {
+                if (/supabase|gestaodb|database|postgres|^db$|^base$/i.test(`${projectName}/${serviceName}`)) {
+                  return { projectName, serviceName, env }
+                }
+              }
+            }
+          }
+        }
+      }
+
       const discovered = serviceRefsInCatalog(catalog)
       const preferred = discovered.filter(({ projectName, serviceName }) =>
         projectName === SUPABASE_RUNTIME_PROJECT || /supabase|gestaodb|database|postgres|^db$|^base$/i.test(`${projectName}/${serviceName}`),
@@ -119,22 +166,6 @@ async function readSupabaseRuntimeEnv(provider?: EasypanelSecretsProvider): Prom
     } catch {
       // Provider not reachable or unauthorized
     }
-  }
-
-  // Fallback: usar variáveis configuradas no próprio ambiente de runtime do Control Tower
-  const processEnvHasSupabase = Boolean(
-    process.env.DATABASE_URL ||
-    process.env.SUPABASE_URL ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.POSTGRES_PASSWORD
-  )
-
-  if (processEnvHasSupabase) {
-    const env: Record<string, string> = {}
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value) env[key] = value
-    }
-    return { projectName: 'control-tower', serviceName: 'runtime-env', env }
   }
 
   const uniqueCandidates = [...new Set(attemptedCandidates)]
