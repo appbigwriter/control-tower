@@ -249,16 +249,22 @@ async function probeProjectHealth(project: RuntimeContractProject): Promise<{ st
   const endpoints = ['/health', '/api/health', '/api/control-tower/health', '/']
   let lastError = ''
 
-  for (const endpoint of endpoints) {
-    const healthUrl = new URL(endpoint, base).toString()
-    try {
-      const response = await fetch(healthUrl, { signal: AbortSignal.timeout(10000) })
-      if (response.ok || (endpoint === '/' && response.status < 500)) {
-        return { status: 'running', healthUrl }
+  const maxAttempts = 6
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    for (const endpoint of endpoints) {
+      const healthUrl = new URL(endpoint, base).toString()
+      try {
+        const response = await fetch(healthUrl, { signal: AbortSignal.timeout(6000) })
+        if (response.ok || (endpoint === '/' && response.status < 500)) {
+          return { status: 'running', healthUrl }
+        }
+        lastError = `http_${response.status}:${healthUrl}`
+      } catch (error) {
+        lastError = `network:${healthUrl}:${error instanceof Error ? error.message : 'timeout'}`
       }
-      lastError = `http_${response.status}:${healthUrl}`
-    } catch (error) {
-      lastError = `network:${healthUrl}:${error instanceof Error ? error.message : 'timeout'}`
+    }
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
     }
   }
 

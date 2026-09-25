@@ -142,7 +142,7 @@ export function buildRuntimeInventory(project: RuntimeContractProject, environme
     validation: 'present in provider and readable by runtime only',
   }))
   const optional: RuntimeVariable[] = [
-    { name: 'PORT', kind: 'optional', required: false, source: 'derived', value: '3400', consumer: 'server', validation: 'integer 1..65535' },
+    { name: 'PORT', kind: 'optional', required: false, source: 'derived', value: profile === 'authority' ? '3400' : '3000', consumer: 'server', validation: 'integer 1..65535' },
     { name: 'HOST', kind: 'optional', required: false, source: 'derived', value: '0.0.0.0', consumer: 'server', validation: 'valid bind host' },
   ]
   return [...derived, ...secrets, ...optional]
