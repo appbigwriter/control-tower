@@ -246,15 +246,23 @@ async function probeProjectHealth(project: RuntimeContractProject): Promise<{ st
   const domain = project.domain?.trim()
   if (!domain) throw new Error('runtime_health_domain_missing')
   const base = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`
-  const healthUrl = new URL('/health', base).toString()
-  let response: Response
-  try {
-    response = await fetch(healthUrl, { signal: AbortSignal.timeout(10000) })
-  } catch {
-    throw new Error(`runtime_health_probe_failed:network:${healthUrl}`)
+  const endpoints = ['/health', '/api/health', '/api/control-tower/health', '/']
+  let lastError = ''
+
+  for (const endpoint of endpoints) {
+    const healthUrl = new URL(endpoint, base).toString()
+    try {
+      const response = await fetch(healthUrl, { signal: AbortSignal.timeout(10000) })
+      if (response.ok || (endpoint === '/' && response.status < 500)) {
+        return { status: 'running', healthUrl }
+      }
+      lastError = `http_${response.status}:${healthUrl}`
+    } catch (error) {
+      lastError = `network:${healthUrl}:${error instanceof Error ? error.message : 'timeout'}`
+    }
   }
-  if (!response.ok) throw new Error(`runtime_health_probe_failed:http_${response.status}:${healthUrl}`)
-  return { status: 'running', healthUrl }
+
+  throw new Error(`runtime_health_probe_failed:${lastError}`)
 }
 
 async function injectRuntimeEnvironment(
