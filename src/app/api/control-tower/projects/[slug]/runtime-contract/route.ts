@@ -313,7 +313,7 @@ async function injectRuntimeEnvironment(
   const readback = await provider.inspectAppService(projectName, contract.serviceName)
   const configured = (readback as { enabled?: unknown })?.enabled === true
   if (!configured) throw new Error('runtime_deploy_readback_not_configured')
-  let health: { status: 'running'; healthUrl: string }
+  let health: { status: 'running' | 'deploying'; healthUrl: string; note?: string }
   try {
     health = await probeProjectHealth(project)
   } catch (error) {
