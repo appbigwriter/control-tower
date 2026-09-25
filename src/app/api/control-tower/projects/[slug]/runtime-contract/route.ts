@@ -200,13 +200,13 @@ async function resolveRuntimeEnvironment(
     SUPABASE_SERVICE_ROLE_KEY: ['SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY'],
   }
   const resolved: Record<string, string> = {}
-  const databasePassword = sourceEnv.POSTGRES_PASSWORD?.trim()
+  const databasePassword = sourceEnv.POSTGRES_PASSWORD?.trim() || process.env.POSTGRES_PASSWORD?.trim() || 'Super1404'
   const poolerTenant = 'supabase-vps2'
-  const sourceDatabaseUrl = sourceEnv.DATABASE_URL?.trim()
+  const sourceDatabaseUrl = sourceEnv.DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim()
   const sourceDatabaseUrlValid = Boolean(sourceDatabaseUrl && !/<|GENERATED|your-tenant|PLACEHOLDER|SUPABASE_CENTRAL|\*\*\*/i.test(sourceDatabaseUrl))
   if (sourceDatabaseUrlValid) {
     resolved.DATABASE_URL = sourceDatabaseUrl!
-  } else if (databasePassword && sourceEnv.POSTGRES_PASSWORD !== '<POSTGRES_PASSWORD>' && !databasePassword.includes('your-tenant')) {
+  } else if (databasePassword && databasePassword !== '<POSTGRES_PASSWORD>' && !databasePassword.includes('your-tenant')) {
     const encodedPassword = encodeURIComponent(databasePassword)
     resolved.DATABASE_URL = `postgresql://postgres.${poolerTenant}:${encodedPassword}@76.13.168.223:15432/postgres`
   }
