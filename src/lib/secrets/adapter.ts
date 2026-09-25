@@ -190,14 +190,14 @@ export class EasypanelSecretsProvider implements SecretsProvider {
 
   private get apiUrl(): string {
     const key = this.envNames?.apiUrl ?? 'EASYPANEL_API_URL'
-    const url = process.env[key]
+    const url = process.env[key] || process.env.EASYPANEL_API_URL
     if (!url) throw new Error(`[EasypanelSecretsProvider] FAIL-CLOSED: ${key} não está configurada no runtime.`)
     return normalizeEasypanelApiUrl(url)
   }
 
   private get apiToken(): string {
     const key = this.envNames?.apiToken ?? 'EASYPANEL_API_TOKEN'
-    const token = process.env[key]?.trim()
+    const token = (process.env[key] || process.env.EASYPANEL_API_TOKEN)?.trim()
     if (!token) throw new Error(`[EasypanelSecretsProvider] FAIL-CLOSED: ${key} obrigatória e ausente.`)
     return token
   }
@@ -210,7 +210,7 @@ export class EasypanelSecretsProvider implements SecretsProvider {
     const segments = namespace.trim().replace(/^\/+|\/+$/g, '').split('/').filter(Boolean)
     const serviceName = segments.at(-1)
     const projectKey = this.envNames?.projectName ?? 'EASYPANEL_PROJECT_NAME'
-    const projectName = process.env[projectKey]?.trim() || 'projetos'
+    const projectName = process.env[projectKey]?.trim() || process.env.EASYPANEL_PROJECT_NAME?.trim() || 'projetos'
     if (segments.length < 2 || !serviceName || !IDENTIFIER_PATTERN.test(serviceName)) {
       throw new Error('[EasypanelSecretsProvider] FAIL-CLOSED: namespace sem serviceName ou identificador inválido.')
     }
