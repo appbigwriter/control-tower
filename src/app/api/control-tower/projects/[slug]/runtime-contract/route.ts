@@ -233,7 +233,7 @@ async function injectRuntimeEnvironment(
   const target = project.hosting_target
   if (target !== 'vps1' && target !== 'vps2') throw new Error('hosting_target_required_for_runtime_injection')
   const envNames = easypanelTargetEnv(target)
-  const projectName = project.hosting_project_name?.trim() || process.env[envNames.projectName]?.trim()
+  const projectName = project.hosting_project_name?.trim() || process.env[envNames.projectName]?.trim() || process.env.EASYPANEL_PROJECT_NAME?.trim() || 'projetos'
   if (!projectName) throw new Error(`easypanel_project_name_missing:${target}`)
   const provider = new EasypanelSecretsProvider(target)
   let services: unknown
