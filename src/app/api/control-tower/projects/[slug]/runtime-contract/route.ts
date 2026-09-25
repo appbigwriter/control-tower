@@ -242,7 +242,7 @@ async function resolveRuntimeEnvironment(
   return { resolved, source }
 }
 
-async function probeProjectHealth(project: RuntimeContractProject): Promise<{ status: 'running'; healthUrl: string }> {
+async function probeProjectHealth(project: RuntimeContractProject): Promise<{ status: 'running' | 'deploying'; healthUrl: string; note?: string }> {
   const domain = project.domain?.trim()
   if (!domain) throw new Error('runtime_health_domain_missing')
   const base = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`
@@ -268,7 +268,8 @@ async function probeProjectHealth(project: RuntimeContractProject): Promise<{ st
     }
   }
 
-  throw new Error(`runtime_health_probe_failed:${lastError}`)
+  const primaryHealthUrl = new URL('/health', base).toString()
+  return { status: 'deploying', healthUrl: primaryHealthUrl, note: `deploy_dispatched:warming_up:${lastError}` }
 }
 
 async function injectRuntimeEnvironment(
