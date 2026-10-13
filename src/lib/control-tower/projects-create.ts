@@ -46,15 +46,26 @@ function runtimeMetadata(input: CreateProjectInput) {
   }
 }
 
-async function persistRuntimeMetadata(supabase: SupabaseLike, projectId: string, input: CreateProjectInput) {
+async function persistRuntimeMetadata(supabase: SupabaseLike, projectId: string | undefined, input: CreateProjectInput) {
   const metadata = runtimeMetadata(input)
-  const { data, error } = await supabase
-    .from('projects')
-    .update(metadata)
-    .eq('id', projectId)
+  const validId = typeof projectId === 'string' && projectId.length >= 8 && projectId !== '[object Object]' && projectId !== 'undefined'
+  
+  const query = supabase.from('projects').update(metadata)
+  const filtered = validId ? query.eq('id', projectId) : query.eq('slug', input.slug)
+  const { data, error } = await filtered
     .select('id, repository_url, repository_path, hosting_target, hosting_project_name, service_name')
-    .single()
-  if (error || !data) return { ok: false as const, error: error?.message ?? 'runtime metadata readback missing' }
+    .maybeSingle()
+
+  if (error || !data) {
+    const fallback = await supabase
+      .from('projects')
+      .update(metadata)
+      .eq('slug', input.slug)
+      .select('id, repository_url, repository_path, hosting_target, hosting_project_name, service_name')
+      .maybeSingle()
+    if (!fallback.error && fallback.data) return { ok: true as const, data: fallback.data }
+    return { ok: false as const, error: error?.message ?? fallback.error?.message ?? 'runtime metadata readback missing' }
+  }
   return { ok: true as const, data }
 }
 export function parseCreateProjectBody(body: unknown): { ok: true; input: CreateProjectInput } | { ok: false; error: string } {
@@ -208,11 +219,15 @@ export async function createProjectHandler(
         return { status: 500, body: { error: msg, code: extractGdbCode(msg) } }
       }
 
-      const projectId = typeof legacyRpc.data === 'string' ? legacyRpc.data : (legacyRpc.data as any)?.id ?? legacyRpc.data
+      const rawData = legacyRpc.data as any
+      const projectId =
+        typeof rawData === 'string'
+          ? rawData
+          : rawData?.project_id ?? rawData?.id ?? (typeof rawData === 'object' ? undefined : String(rawData))
       const schemaPrefix = pair.businessType === 'blog' ? 'blog' : pair.businessType === 'store' ? 'store' : pair.businessType === 'saas' ? 'saas' : 'custom'
       const schemaName = `${schemaPrefix}_${input.slug}`
 
-      const runtime = await persistRuntimeMetadata(supabase, String(projectId), input)
+      const runtime = await persistRuntimeMetadata(supabase, projectId, input)
       if (!runtime.ok) return { status: 500, body: { error: sanitizeError(`Falha ao registrar target de runtime: ${runtime.error}`), code: 'GDB_RUNTIME_TARGET_READBACK_FAILED' } }
 
       return {
