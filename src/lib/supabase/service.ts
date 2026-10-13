@@ -46,6 +46,9 @@ export function createServiceRoleClient() {
           'http://supabase-supabase-gestaodb.pojxaz.easypanel.host',
         )
         try {
+          if (typeof Request !== 'undefined' && input instanceof Request) {
+            return await fetch(new Request(fallbackUrl, input))
+          }
           return await fetch(fallbackUrl, init)
         } catch {
           // Se o fallback também falhar, lança o erro primário
