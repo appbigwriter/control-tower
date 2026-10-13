@@ -282,6 +282,46 @@ export async function createProjectHandler(
     error?: string
   }
 
+  // The deployed v2 RPC omits readback on successful idempotent replay.
+  // Verify the stored project's schema again before accepting that replay.
+  if (result.ok === true && result.status === 'replayed' && result.job_status === 'success' && result.readback == null) {
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id, schema_name, business_type')
+      .eq('id', result.project_id)
+      .eq('slug', input.slug)
+      .maybeSingle()
+
+    if (projectError || !project || project.business_type !== pair.businessType) {
+      return {
+        status: 500,
+        body: {
+          error: sanitizeError(projectError?.message ?? 'Projeto do replay nao encontrado ou incompativel'),
+          code: 'GDB_REPLAY_READBACK_FAILED',
+          project_id: result.project_id ?? null,
+          job_id: result.job_id ?? null,
+        },
+      }
+    }
+
+    const verification = await supabase.rpc('verify_project_schema', {
+      p_schema_name: project.schema_name,
+      p_business_type: project.business_type,
+    })
+    if (verification.error) {
+      return {
+        status: 500,
+        body: {
+          error: sanitizeError(verification.error.message),
+          code: 'GDB_REPLAY_READBACK_FAILED',
+          project_id: result.project_id ?? null,
+          job_id: result.job_id ?? null,
+        },
+      }
+    }
+    result.readback = verification.data
+  }
+
   // nunca 200/success sem ok=true E readback validado
   const readbackOk = evaluateReadback(result.readback)
   if (result.ok !== true || !readbackOk.ok || result.job_status !== 'success') {
