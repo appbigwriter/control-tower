@@ -14,14 +14,16 @@ export function createServiceRoleClient() {
     supabaseUrl = supabaseUrl.replace('sup-control-tower.fbr.news', 'supabase-control-tower-api.fbr.news')
   }
 
-  // Garantir HTTPS apenas para domínios públicos externos que não sejam locais ou do Easypanel
-  const isInternalHost =
-    supabaseUrl.includes('.easypanel.host') ||
-    supabaseUrl.includes('localhost') ||
-    supabaseUrl.includes('127.0.0.1') ||
-    supabaseUrl.includes('kong:')
-  if (!isInternalHost && !internalUrl && supabaseUrl.includes('supabase-control-tower-api.fbr.news') && supabaseUrl.startsWith('http://')) {
-    supabaseUrl = supabaseUrl.replace('http://', 'https://')
+  // Easypanel ingress redirects HTTP to HTTPS, stripping Authorization across
+  // origins. Connect directly over HTTPS even when configured as "internal".
+  // Docker service URLs such as http://kong:8000 keep their original protocol.
+  const endpoint = new URL(supabaseUrl)
+  if (endpoint.protocol === 'http:' && (
+    endpoint.hostname.endsWith('.easypanel.host') ||
+    endpoint.hostname === 'supabase-control-tower-api.fbr.news'
+  )) {
+    endpoint.protocol = 'https:'
+    supabaseUrl = endpoint.toString()
   }
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy-key-for-build'
@@ -43,7 +45,7 @@ export function createServiceRoleClient() {
       if (urlStr.includes('supabase-control-tower-api.fbr.news')) {
         const fallbackUrl = urlStr.replace(
           'https://supabase-control-tower-api.fbr.news',
-          'http://supabase-supabase-gestaodb.pojxaz.easypanel.host',
+          'https://supabase-supabase-gestaodb.pojxaz.easypanel.host',
         )
         try {
           if (typeof Request !== 'undefined' && input instanceof Request) {
