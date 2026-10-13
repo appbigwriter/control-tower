@@ -45,7 +45,10 @@ export function LoginForm() {
         <label className="mt-6 block">
           <span className="text-xs uppercase tracking-[0.22em] text-neutral-400">Segredo</span>
           <input
+            id="secret"
+            name="secret"
             type="password"
+            autoComplete="current-password"
             className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-cyan-300/40"
             value={secret}
             onChange={(event) => setSecret(event.target.value)}
